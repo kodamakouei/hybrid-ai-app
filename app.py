@@ -50,7 +50,7 @@ except KeyError:
 
 st.set_page_config(page_title="教育的ハイブリッドAI", layout="wide")
 
-st.title("👨‍🏫 教育的ハイブリッドAIチャット")
+st.title("ユッキー")
 
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
  
