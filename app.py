@@ -90,6 +90,8 @@ if "chat" not in st.session_state:
 
     )
  
+AI_AVATAR="yukki-icon.jpg"
+
 # --- 3. チャット履歴の表示 ---
  
 # チャット履歴がない場合は初期化
