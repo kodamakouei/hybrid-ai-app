@@ -33,7 +33,6 @@ st.title("ユッキー")
 st.caption("私は対話型AIユッキーだよ。数学の問題など思考する問題の答えは教えないからね💕")
 
 # --- 2. クライアントとセッションの初期化（記憶力の確保） ---
-
 if "client" not in st.session_state:
     try:
         st.session_state.client = genai.Client(api_key=API_KEY)
@@ -51,36 +50,41 @@ if "chat" not in st.session_state:
         config=config
     )
 
-# ★修正箇所: アバターの定義を追加
-USER_AVATAR = "🧑"  # ユーザーアイコンは絵文字のまま
-AI_AVATAR = "yukki-icon.jpg" # AIアイコンは画像ファイル名
+# アバターの定義
+USER_AVATAR = "🧑"  
+AI_AVATAR = "yukki-icon.jpg" 
 
 # --- 3. チャット履歴の表示 ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# 履歴をすべて表示
 for message in st.session_state.messages:
-    # ★修正箇所: 役割に応じてアイコンを切り替え、適用
+    # 役割に応じてアイコンを切り替え、適用
     avatar_icon = USER_AVATAR if message["role"] == "user" else AI_AVATAR
     with st.chat_message(message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
-
+        
 # --- 4. ユーザー入力の処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
     # ユーザーのメッセージを履歴に追加
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # ★修正箇所: ユーザーメッセージにアイコンを適用
+    # ユーザーメッセージにアイコンを適用
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
 
     # AIに応答を送信
-    # ★修正箇所: AIメッセージにアイコンを適用
     with st.chat_message("assistant", avatar=AI_AVATAR):
         with st.spinner("思考中..."):
             try:
+                # 記憶のあるチャットセッションを使用
                 response = st.session_state.chat.send_message(prompt)
+                
+                # 応答を画面に表示
                 st.markdown(response.text)
+
+                # AIの応答を履歴に追加
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
                 st.error(f"APIエラーが発生しました: {e}")
