@@ -38,7 +38,7 @@ except KeyError:
     st.stop()
 
 # -----------------------------------------------------
-# TTS生成関数
+# TTS生成関数（JS {} 衝突修正済み）
 # -----------------------------------------------------
 @st.cache_data
 def base64_to_audio_url(base64_data, sample_rate):
@@ -73,8 +73,11 @@ def base64_to_audio_url(base64_data, sample_rate):
         writeString(view, offset,'data'); offset+=4;
         view.setUint32(offset,dataSize,true); offset+=4;
         const pcm16=new Int16Array(pcmData);
-        for(let i=0;i<pcm16.length;i++){view.setInt16(offset,pcm16[i],true); offset+=2;}
-        return new Blob([buffer],{type:'audio/wav'});
+        for(let i=0;i<pcm16.length;i++) {{
+            view.setInt16(offset,pcm16[i],true);
+            offset+=2;
+        }}
+        return new Blob([buffer], {{ type:'audio/wav' }});
     }}
     const pcmData=base64ToArrayBuffer('{base64_data}');
     const wavBlob=pcmToWav(pcmData,{sample_rate});
@@ -218,4 +221,6 @@ if prompt := st.chat_input("質問を入力してください..."):
                 st.markdown(response_text)
                 st.info("🔊 音声応答を準備中...")
                 generate_and_play_tts(response_text)
-                st.session_state.messages.append({"role":"assistant"})
+                st.session_state.messages.append({"role":"assistant","content":response_text})
+            except Exception as e:
+                st.error(f"APIエラー: {e}")
