@@ -92,7 +92,6 @@ def generate_and_play_tts(text):
         rate = int(mime_type.split("rate=")[1]) if "rate=" in mime_type else 24000
         base64_to_audio_url(audio_data["data"], rate)
 
-
 # ===============================
 # Streamlit UI
 # ===============================
@@ -108,37 +107,44 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # ===============================
-# 音声入力ボタン（文字を質問欄に自動入力）
+# 音声入力ボタン（🎙話す→質問欄に入力＆自動送信）
 # ===============================
 components.html("""
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
-if(SpeechRecognition){
+
+if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    function startRec(){
+    function startRec() {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     }
 
-    recognition.onresult = (event)=>{
+    recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
+
         // Streamlitの質問欄（chat_input）を探す
         const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-        if(chatInput){
+        if (chatInput) {
             chatInput.value = text;
             chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+            // 🔥 自動で送信（Enterキーを押す）
+            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+            chatInput.dispatchEvent(enterEvent);
         }
     };
-    recognition.onerror = (e)=>{
+
+    recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ " + e.error;
     };
-}else{
+} else {
     document.write("このブラウザは音声認識に対応していません。");
 }
 </script>
@@ -155,7 +161,7 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("質問を入力してください..."):
-    st.session_state.messages.append({"role":"user","content":prompt})
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
@@ -166,4 +172,4 @@ if prompt := st.chat_input("質問を入力してください..."):
             st.markdown(text)
             st.info("🔊 音声出力中...")
             generate_and_play_tts(text)
-            st.session_state.messages.append({"role":"assistant","content":text})
+            st.session_state.messages.append({"role": "assistant", "content": text})
