@@ -13,6 +13,9 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
+USER_AVATAR = "🧑"  # ユーザーアイコンは絵文字のまま
+
+AI_AVATAR = "yukki-icon.jpg" # AIアイコンは画像ファイル名
 # 音声合成モデル (Gemini TTS)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
