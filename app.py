@@ -13,8 +13,6 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
-USER_AVATAR = "🧑"
-AI_AVATAR = "assets/yukki-icon.jpg"  # Streamlit 内に置いた画像
 
 # TTS (Gemini)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
@@ -49,6 +47,30 @@ def play_tts(text: str):
     except Exception as e:
         st.warning(f"音声生成に失敗しました: {e}")
 
+# ===================== Whisper 音声認識 =====================
+def transcribe_audio(audio_bytes):
+    """
+    WebM音声をWhisper APIに送信して文字起こし
+    """
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    files = {"file": ("audio.webm", audio_bytes, "audio/webm")}
+    
+    response = requests.post(STT_URL, headers=headers, files=files)
+
+    # JSONが返る場合のみ処理
+    if "application/json" in response.headers.get("Content-Type", ""):
+        result = response.json()
+        if "text" in result:
+            return result["text"].strip()
+        else:
+            st.warning("認識結果がJSONに含まれていません。")
+            st.json(result)
+            return None
+    else:
+        st.error("音声認識APIがJSONを返しませんでした。")
+        st.text(response.text)
+        return None
+
 # ===================== Streamlit UI =====================
 st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー 🎀")
@@ -69,35 +91,20 @@ if audio_data and len(audio_data["bytes"]) > 0:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    # ===== Whisper API に音声ファイルを送信 =====
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
+    prompt = transcribe_audio(audio_data["bytes"])
+    if prompt:
+        st.success(f"🗣️ 認識結果: {prompt}")
 
-    r = requests.post(STT_URL, headers=headers, files=files)
+        # ===== チャット =====
+        with st.chat_message("user", avatar=USER_AVATAR):
+            st.markdown(prompt)
 
-    if "application/json" in r.headers.get("Content-Type", ""):
-        result = r.json()
-        try:
-            prompt = result["text"].strip()
-            st.success(f"🗣️ 認識結果: {prompt}")
-
-            # ===== チャット =====
-            with st.chat_message("user", avatar=USER_AVATAR):
-                st.markdown(prompt)
-
-            with st.chat_message("assistant", avatar=AI_AVATAR):
-                with st.spinner("ユッキーが考え中..."):
-                    response = st.session_state.chat.send_message(prompt)
-                    answer = response.text.strip()
-                    st.markdown(answer)
-                    play_tts(answer)
-
-        except Exception as e:
-            st.error(f"音声認識エラー: {e}")
-            st.json(result)
-    else:
-        st.error("音声認識APIがJSONを返しませんでした。")
-        st.text(r.text)
+        with st.chat_message("assistant", avatar=AI_AVATAR):
+            with st.spinner("ユッキーが考え中..."):
+                response = st.session_state.chat.send_message(prompt)
+                answer = response.text.strip()
+                st.markdown(answer)
+                play_tts(answer)
 
 # ===================== テキスト入力 =====================
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
