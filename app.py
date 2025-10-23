@@ -71,18 +71,27 @@ def generate_and_play_tts(text):
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
-            "speechConfig":{"voiceConfig":{"prebuiltVoiceConfig":{"voiceName":TTS_VOICE}}}
+            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}}
         },
         "model": TTS_MODEL
     }
-    headers = {'Content-Type':'application/json'}
+    headers = {'Content-Type': 'application/json'}
     response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
     result = response.json()
-    audio_data = result["candidates"][0]["content"]["parts"][0].get("inlineData", {})
+
+    # ✅ 新しい構造に対応
+    try:
+        audio_data = result["contents"][0]["parts"][0]["inlineData"]
+    except KeyError:
+        st.error("❌ 音声データを取得できませんでした。レスポンスを確認してください。")
+        st.json(result)
+        return
+
     if "data" in audio_data:
         mime_type = audio_data.get("mimeType", "audio/L16;rate=24000")
         rate = int(mime_type.split("rate=")[1]) if "rate=" in mime_type else 24000
         base64_to_audio_url(audio_data["data"], rate)
+
 
 # ===============================
 # Streamlit UI
