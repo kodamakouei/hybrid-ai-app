@@ -153,9 +153,6 @@ def generate_and_play_tts(text):
 # --- 音声入力UI（Web Speech API） ---
 # -----------------------------------------------------
 def speech_to_text_ui():
-    """
-    Web Speech APIによる音声入力ボタン。
-    """
     st.markdown("### 🎙️ 音声で質問する")
     html_code = """
     <script>
@@ -183,12 +180,18 @@ def speech_to_text_ui():
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            const streamlitInput = window.parent.document.querySelector('input[data-testid="stChatInput"]');
-            if (streamlitInput) {
-                streamlitInput.value = transcript;
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
-                streamlitInput.dispatchEvent(enterEvent);
+            
+            // Streamlit の textarea に値をセットして送信
+            const stInput = window.parent.document.querySelector('textarea[data-testid="stTextArea"]');
+            if (stInput) {
+                stInput.value = transcript;
+                stInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                // Enter キーイベントを発火
+                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
+                stInput.dispatchEvent(enterEvent);
             }
+            
             document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
         };
 
@@ -204,6 +207,7 @@ def speech_to_text_ui():
     <p id="mic-status">マイク停止中</p>
     """
     components.html(html_code, height=120)
+
 
 
 # -----------------------------------------------------
