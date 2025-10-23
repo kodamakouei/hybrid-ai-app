@@ -13,13 +13,13 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
-# 音声合成モデル
+# 音声合成モデル (Gemini TTS)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 
-# 音声→テキスト用エンドポイント（REST）
-STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+# 音声→テキスト用エンドポイント（Whisper）
+STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/whisper-1:transcribe"
 
 # ===================== APIキー =====================
 try:
@@ -35,9 +35,9 @@ def play_tts(text: str):
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
-            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}},
+            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}}
         },
-        "model": TTS_MODEL,
+        "model": TTS_MODEL
     }
     headers = {"Content-Type": "application/json"}
     r = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
@@ -75,21 +75,18 @@ if audio_data:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    # ==== Gemini Speech-to-Text API呼び出し ====
+    # ==== Whisper API呼び出し ====
     audio_b64 = base64.b64encode(audio_data["bytes"]).decode("utf-8")
-    headers = {"Content-Type": "application/json"}
     payload = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"inlineData": {"mimeType": "audio/webm", "data": audio_b64}}]
-        }]
+        "audio": audio_b64,
+        "mime_type": "audio/webm"
     }
-
+    headers = {"Content-Type": "application/json"}
     r = requests.post(f"{STT_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
     result = r.json()
 
     try:
-        prompt = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        prompt = result["text"].strip()
         st.success(f"🗣️ 認識結果: {prompt}")
 
         # ==== Geminiチャット ====
