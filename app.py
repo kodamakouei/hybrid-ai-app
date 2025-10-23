@@ -14,14 +14,20 @@ SYSTEM_PROMPT = """
 あなたは、教育的な目的を持つ高度なAIアシスタントです。ユーザーの質問に対し、以下の厳格な3つのルールに従って応答してください。
 
 【応答ルール1：事実・知識の質問（直接回答）】
-質問が、**確定した事実**、**固有名詞**、**定義**、**単純な知識**を尋ねるものである場合、**その答えを直接、かつ簡潔な名詞または名詞句で回答してください**。
+質問が、確定した事実、固有名詞、定義、単純な知識を尋ねるものである場合、
+その答えを直接、かつ簡潔な名詞または名詞句で回答してください。
 
 【応答ルール2：計算・思考・問題解決の質問（解法ガイド）】
-質問が、**計算**、**分析**、**プログラミング**、**論理的な思考**を尋ねるものである場合、**最終的な答えや途中式は絶対に教えないでください**。代わりに、ユーザーが次に取るべき**最初の、最も重要な解法のステップ**や**必要な公式のヒント**を教えることで、ユーザーの自習を促してください。
-例：「積分の問題」→「まずは部分分数分解を行うと良いでしょう。」
+質問が、計算、分析、プログラミング、論理的な思考を尋ねるものである場合、
+最終的な答えや途中式は絶対に教えないでください。
+代わりに、ユーザーが次に取るべき最初のステップや必要な公式のヒントを教えてください。
 
 【応答ルール3：途中式の判定（採点モード）】
-ユーザーが「この途中式は正しいか？」や「次のステップはこうですか？」という形で**具体的な式や手順**を提示した場合、あなたは**教師としてその式が正しいか間違っているかを判断**し、正しい場合は「その通りです。」と肯定し、間違っている場合は「残念ながら、ここが間違っています。もう一度確認しましょう。」と**間違いの場所や種類を具体的に指摘せずに**優しくフィードバックしてください。
+ユーザーが「この途中式は正しいか？」や「次のステップはこうですか？」という形で
+具体的な式や手順を提示した場合、あなたは教師としてその式が正しいか間違っているかを判断します。
+正しい場合は「その通りです。」と肯定し、
+間違っている場合は「残念ながら、ここが間違っています。もう一度確認しましょう。」と
+優しくフィードバックしてください。
 """
 
 # -----------------------------------------------------
@@ -32,16 +38,16 @@ TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
 
-# --- APIキーの読み込み ---
+# --- APIキー読み込み ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except KeyError:
-    st.error("APIキーが設定されていません。Streamlit Cloudのシークレットを設定してください。")
+    st.error("APIキーが設定されていません。Streamlit Cloudのシークレットに設定してください。")
     st.stop()
 
 
 # -----------------------------------------------------
-# --- 音声を自動再生するための関数 ---
+# --- 音声を自動再生する関数 ---
 # -----------------------------------------------------
 @st.cache_data
 def base64_to_audio_url(base64_data, sample_rate):
@@ -68,6 +74,12 @@ def base64_to_audio_url(base64_data, sample_rate):
             const view = new DataView(buffer);
             let offset = 0;
 
+            function writeString(view, offset, string) {{
+                for (let i = 0; i < string.length; i++) {{
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }}
+            }}
+
             writeString(view, offset, 'RIFF'); offset += 4;
             view.setUint32(offset, 36 + dataSize, true); offset += 4;
             writeString(view, offset, 'WAVE'); offset += 4;
@@ -88,12 +100,6 @@ def base64_to_audio_url(base64_data, sample_rate):
                 offset += 2;
             }}
             return new Blob([buffer], {{ type: 'audio/wav' }});
-        }}
-
-        function writeString(view, offset, string) {{
-            for (let i = 0; i < string.length; i++) {{
-                view.setUint8(offset + i, string.charCodeAt(i));
-            }}
         }}
 
         const pcmData = base64ToArrayBuffer('{base64_data}');
@@ -150,24 +156,20 @@ def generate_and_play_tts(text):
 
 
 # -----------------------------------------------------
-# --- 音声入力UI（Web Speech API） ---
+# --- 音声入力UI（確実に反応する改良版） ---
 # -----------------------------------------------------
 def speech_to_text_ui():
-    """
-    Web Speech APIによる音声入力ボタン。
-    """
     st.markdown("### 🎙️ 音声で質問する")
+
     html_code = """
     <script>
     let recognizing = false;
-    let recognition;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
+        const recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = false;
-        recognition.continuous = false;
 
         function startRecognition() {
             if (!recognizing) {
@@ -183,12 +185,7 @@ def speech_to_text_ui():
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            const streamlitInput = window.parent.document.querySelector('input[data-testid="stChatInput"]');
-            if (streamlitInput) {
-                streamlitInput.value = transcript;
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
-                streamlitInput.dispatchEvent(enterEvent);
-            }
+            window.parent.postMessage({ type: 'streamlit:setComponentValue', value: transcript }, '*');
             document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
         };
 
@@ -205,6 +202,14 @@ def speech_to_text_ui():
     """
     components.html(html_code, height=120)
 
+    # JavaScriptからの入力値を受け取る
+    speech_input = components.declare_component("speech_input", default=None)
+    result = speech_input()
+
+    if result:
+        st.session_state["pending_prompt"] = result
+        st.success(f"🎤 認識結果: {result}")
+
 
 # -----------------------------------------------------
 # --- Streamlitアプリ本体 ---
@@ -213,7 +218,7 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー")
 st.caption("私は対話型AIユッキーだよ。数学の問題など思考する問題の答えは教えないからね💕")
 
-# --- Gemini初期化 ---
+# Gemini初期化
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
 
@@ -233,11 +238,18 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
 
-# 🎤 音声入力UI追加！
+# 🎙 音声入力UI
 speech_to_text_ui()
 
-# --- ユーザー入力処理 ---
-if prompt := st.chat_input("質問を入力してください..."):
+# --- ユーザー入力処理（音声 or 文字） ---
+prompt = st.chat_input("質問を入力してください...")
+
+# 音声入力があれば優先
+if "pending_prompt" in st.session_state and st.session_state["pending_prompt"]:
+    prompt = st.session_state["pending_prompt"]
+    st.session_state["pending_prompt"] = ""
+
+if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
@@ -246,13 +258,10 @@ if prompt := st.chat_input("質問を入力してください..."):
         with st.spinner("思考中..."):
             try:
                 response = st.session_state.chat.send_message(prompt)
-                response_text = response.text
+                response_text = response.text.strip()
                 st.markdown(response_text)
-                st.info("🔊 音声応答を準備中...")
-                if generate_and_play_tts(response_text):
-                    st.empty()
-                else:
-                    st.error("音声生成に失敗しました。")
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
+                st.info("🔊 音声応答を準備中...")
+                generate_and_play_tts(response_text)
             except Exception as e:
-                st.error(f"APIエラーが発生しました: {e}")
+                st.error(f"APIエラー: {e}")
