@@ -4,7 +4,6 @@ import google.generativeai as genai
 import base64
 import requests
 import json
-import os
 
 # ===================== 設定 =====================
 SYSTEM_PROMPT = """
@@ -14,12 +13,15 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
-# 音声合成モデル (Gemini TTS)
+USER_AVATAR = "🧑"
+AI_AVATAR = "assets/yukki-icon.jpg"  # Streamlit内に配置した画像
+
+# TTS (Gemini)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 
-# 音声→テキスト用エンドポイント（Whisper）
+# Whisper STT
 STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/whisper-1:transcribe"
 
 # ===================== APIキー =====================
@@ -63,24 +65,26 @@ if "chat" not in st.session_state:
 st.markdown("### 🎙️ 音声で質問する")
 audio_data = mic_recorder(start_prompt="🎤 話す", stop_prompt="🛑 停止", just_once=True, use_container_width=True)
 
-if audio_data:
+if audio_data and len(audio_data["bytes"]) > 0:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
     files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
-    r = requests.post(f"{STT_URL}?key={API_KEY}", files=files)
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    
+    r = requests.post(STT_URL, headers=headers, files=files)
 
-    if r.headers.get("Content-Type") == "application/json":
+    if "application/json" in r.headers.get("Content-Type", ""):
         result = r.json()
         try:
-            prompt = result["text"].strip()
+            prompt = result.get("text", "").strip()
             st.success(f"🗣️ 認識結果: {prompt}")
 
             # ==== チャット ====
-            with st.chat_message("user", avatar="🧑"):
+            with st.chat_message("user", avatar=USER_AVATAR):
                 st.markdown(prompt)
 
-            with st.chat_message("assistant", avatar="yukki-icon.jpg"):
+            with st.chat_message("assistant", avatar=AI_AVATAR):
                 with st.spinner("ユッキーが考え中..."):
                     response = st.session_state.chat.send_message(prompt)
                     answer = response.text.strip()
@@ -97,10 +101,10 @@ if audio_data:
 # ===================== テキスト入力 =====================
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
 if prompt_text:
-    with st.chat_message("user", avatar="🧑"):
+    with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt_text)
 
-    with st.chat_message("assistant", avatar="yukki-icon.jpg"):
+    with st.chat_message("assistant", avatar=AI_AVATAR):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt_text)
             answer = response.text.strip()
