@@ -96,39 +96,23 @@ def generate_and_play_tts(text):
 # Streamlit UI
 # ===============================
 
-# ★★★ 修正箇所 1: アバターサイズと配置のためのカスタムCSSを注入 ★★★
+# ★★★ 修正箇所 1: アバターサイズを大きくするためのカスタムCSSを注入 ★★★
+# CSSは、Streamlitのチャットメッセージ内の画像（アバター）をターゲットにサイズを64pxに固定します。
 st.markdown("""
 <style>
-/* ---------------------------------------------------- */
-/* 共通設定: アバターコンテナのサイズと配置 */
-/* ---------------------------------------------------- */
-
-/* アバターコンテナのセレクタ (st-emotion-cache-1f1f2x2) */
-/* 注: このセレクタはAIとユーザーの両方に適用されるため、両方のアバターサイズが500pxになります。 */
-div[data-testid="stChatMessage"] .st-emotion-cache-1f1f2x2 {
-    width: 500px !important; /* 500pxに拡大 */
-    height: 500px !important; /* 500pxに拡大 */
-    /* 垂直方向の中央揃えは全アバターに適用 */
-    align-items: center; 
-    
-    /* ユーザーアバター（絵文字）を大きく見せるための調整 */
-    font-size: 300px !important; /* 500pxのコンテナに合わせて調整 */
-    
-    /* デフォルトの水平配置（左寄せ/右寄せ）を尊重するため、初期値を設定 */
-    justify-content: initial; 
-}
-
-/* Chat Message Avatar Image (User and Assistant) - 画像のサイズ固定 */
+/* Chat Message Avatar Image (User and Assistant) */
 div[data-testid="stChatMessage"] img {
-    width: 500px !important; /* 500pxに拡大 */
-    height: 500px !important; /* 500pxに拡大 */
-    min-width: 500px !important; /* 500pxに拡大 */
-    min-height: 500px !important; /* 500pxに拡大 */
-    object-fit: cover !important; /* 画像を中央に配置し、枠に収まるようにする */
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px !important;
+    min-height: 64px !important;
+    object-fit: cover !important; 
 }
-/* ---------------------------------------------------- */
-/* ユーザーの右寄せはStreamlitのデフォルト動作で維持されます。 */
-/* ---------------------------------------------------- */
+/* ユーザーアバター（絵文字）を大きく見せるための調整 */
+div[data-testid="stChatMessage"] .st-emotion-cache-1f1f2x2 {
+    font-size: 38px !important; 
+}
+
 </style>
 """, unsafe_allow_html=True)
 # ★★★ 修正箇所 1 終了 ★★★
