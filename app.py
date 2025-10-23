@@ -13,18 +13,22 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
+# 音声合成モデル
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 
-# ===================== APIキー読み込み =====================
+# 音声→テキスト用エンドポイント（REST）
+STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+# ===================== APIキー =====================
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except KeyError:
     st.error("❌ Streamlit Secrets に GEMINI_API_KEY が設定されていません。")
     st.stop()
 
-# ===================== TTS（音声生成）関数 =====================
+# ===================== TTS（音声生成） =====================
 def play_tts(text: str):
     """Gemini TTSで音声を生成して再生"""
     payload = {
@@ -50,15 +54,14 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー 🎀")
 st.caption("音声でも文字でも質問できるAIだよ。思考系問題はヒントだけね💕")
 
-# ===================== Gemini初期化 =====================
+# Geminiチャットモデル初期化
 genai.configure(api_key=API_KEY)
-
 if "chat" not in st.session_state:
     model_chat = genai.GenerativeModel("gemini-2.5-flash")
     st.session_state.chat = model_chat.start_chat(history=[])
     st.session_state.chat.send_message(SYSTEM_PROMPT)
 
-# ===================== 音声録音ボタン =====================
+# ===================== 音声入力 =====================
 st.markdown("### 🎙️ 音声で質問する")
 
 audio_data = mic_recorder(
@@ -68,37 +71,37 @@ audio_data = mic_recorder(
     use_container_width=True,
 )
 
-# ===================== 音声→テキスト変換 =====================
 if audio_data:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    try:
-        model_audio = genai.GenerativeModel("gemini-1.5-pro")  # ✅ 音声対応モデル
-        result = model_audio.generate_content(
-            [
-                {
-                    "role": "user",
-                    "parts": [
-                        {"mime_type": "audio/webm", "data": audio_data["bytes"]}
-                    ],
-                }
-            ]
-        )
+    # ==== Gemini Speech-to-Text API呼び出し ====
+    audio_b64 = base64.b64encode(audio_data["bytes"]).decode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"inlineData": {"mimeType": "audio/webm", "data": audio_b64}}]
+        }]
+    }
 
-        prompt = result.text.strip()
+    r = requests.post(f"{STT_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+    result = r.json()
+
+    try:
+        prompt = result["candidates"][0]["content"]["parts"][0]["text"].strip()
         st.success(f"🗣️ 認識結果: {prompt}")
 
-        # ===================== Geminiへの質問 =====================
+        # ==== Geminiチャット ====
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt)
             answer = response.text.strip()
-
             st.chat_message("assistant").markdown(answer)
             play_tts(answer)
 
     except Exception as e:
         st.error(f"音声認識エラー: {e}")
+        st.json(result)
 
 # ===================== テキスト入力 =====================
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
