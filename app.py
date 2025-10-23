@@ -75,30 +75,33 @@ if audio_data:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    # ==== Whisper API呼び出し ====
-    audio_b64 = base64.b64encode(audio_data["bytes"]).decode("utf-8")
-    payload = {
-        "audio": audio_b64,
-        "mime_type": "audio/webm"
+    # ==== Whisper API呼び出し（multipart/form-data） ====
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    files = {
+        "file": ("audio.webm", audio_data["bytes"], "audio/webm")
     }
-    headers = {"Content-Type": "application/json"}
-    r = requests.post(f"{STT_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
-    result = r.json()
 
-    try:
-        prompt = result["text"].strip()
-        st.success(f"🗣️ 認識結果: {prompt}")
+    r = requests.post(STT_URL, headers=headers, files=files)
 
-        # ==== Geminiチャット ====
-        with st.spinner("ユッキーが考え中..."):
-            response = st.session_state.chat.send_message(prompt)
-            answer = response.text.strip()
-            st.chat_message("assistant").markdown(answer)
-            play_tts(answer)
+    if r.headers.get("Content-Type") == "application/json":
+        result = r.json()
+        try:
+            prompt = result["text"].strip()
+            st.success(f"🗣️ 認識結果: {prompt}")
 
-    except Exception as e:
-        st.error(f"音声認識エラー: {e}")
-        st.json(result)
+            # ==== Geminiチャット ====
+            with st.spinner("ユッキーが考え中..."):
+                response = st.session_state.chat.send_message(prompt)
+                answer = response.text.strip()
+                st.chat_message("assistant").markdown(answer)
+                play_tts(answer)
+
+        except Exception as e:
+            st.error(f"音声認識エラー: {e}")
+            st.json(result)
+    else:
+        st.error("音声認識APIがJSONを返しませんでした。")
+        st.text(r.text)
 
 # ===================== テキスト入力 =====================
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
