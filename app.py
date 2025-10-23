@@ -4,6 +4,7 @@ import google.generativeai as genai
 import base64
 import requests
 import json
+import os
 
 # ===================== 設定 =====================
 SYSTEM_PROMPT = """
@@ -13,9 +14,6 @@ SYSTEM_PROMPT = """
 ・ユーザーが成長できるように、優しく導くこと。
 """
 
-USER_AVATAR = "🧑"  # ユーザーアイコンは絵文字のまま
-
-AI_AVATAR = "yukki-icon.jpg" # AIアイコンは画像ファイル名
 # 音声合成モデル (Gemini TTS)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
@@ -93,11 +91,15 @@ if audio_data:
             st.success(f"🗣️ 認識結果: {prompt}")
 
             # ==== Geminiチャット ====
-            with st.spinner("ユッキーが考え中..."):
-                response = st.session_state.chat.send_message(prompt)
-                answer = response.text.strip()
-                st.chat_message("assistant").markdown(answer)
-                play_tts(answer)
+            with st.chat_message("user", avatar=USER_AVATAR):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant", avatar=yukki-icon.jpg):
+                with st.spinner("ユッキーが考え中..."):
+                    response = st.session_state.chat.send_message(prompt)
+                    answer = response.text.strip()
+                    st.markdown(answer)
+                    play_tts(answer)
 
         except Exception as e:
             st.error(f"音声認識エラー: {e}")
@@ -110,10 +112,10 @@ if audio_data:
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
 
 if prompt_text:
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt_text)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=AI_AVATAR):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt_text)
             answer = response.text.strip()
