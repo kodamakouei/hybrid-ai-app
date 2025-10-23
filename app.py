@@ -77,10 +77,18 @@ if audio_data:
     st.info("🧠 音声認識中...")
 
     # ==== Whisper API呼び出し（multipart/form-data） ====
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    files = {
-        "file": ("audio.webm", audio_data["bytes"], "audio/webm")
-    }
+
+    files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
+    r = requests.post(f"{STT_URL}?key={API_KEY}", files=files)
+
+    if r.headers.get("Content-Type") == "application/json":
+      result = r.json()
+      prompt = result["text"].strip()
+      st.success(f"🗣️ 認識結果: {prompt}")
+    else:
+      st.error("音声認識APIがJSONを返しませんでした。")
+      st.text(r.text)  # 返ってきたエラー内容を確認
+
 
     r = requests.post(STT_URL, headers=headers, files=files)
 
