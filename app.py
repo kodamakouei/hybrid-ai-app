@@ -49,7 +49,8 @@ st.caption("音声でも文字でも質問できるAIだよ。思考系問題は
 
 # Geminiクライアント初期化
 if "client" not in st.session_state:
-    st.session_state.client = genai.Client(api_key=API_KEY)
+    genai.configure(api_key=API_KEY)
+    st.session_state.client = genai.GenerativeModel("gemini-1.5-flash")  # ここでモデル指定
 
 if "chat" not in st.session_state:
     st.session_state.chat = st.session_state.client.chats.create(
