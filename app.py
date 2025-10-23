@@ -8,26 +8,14 @@ import requests
 import streamlit.components.v1 as components
 
 # -----------------------------------------------------
-# 【システム指示】教育的ハイブリッドAIのルール
+# 【システム指示】
 # -----------------------------------------------------
 SYSTEM_PROMPT = """
-あなたは、教育的な目的を持つ高度なAIアシスタントです。ユーザーの質問に対し、以下の厳格な3つのルールに従って応答してください。
+あなたは教育的な目的を持つAIアシスタントです。以下のルールに従って回答してください。
 
-【応答ルール1：事実・知識の質問（直接回答）】
-質問が、確定した事実、固有名詞、定義、単純な知識を尋ねるものである場合、
-その答えを直接、かつ簡潔な名詞または名詞句で回答してください。
-
-【応答ルール2：計算・思考・問題解決の質問（解法ガイド）】
-質問が、計算、分析、プログラミング、論理的な思考を尋ねるものである場合、
-最終的な答えや途中式は絶対に教えないでください。
-代わりに、ユーザーが次に取るべき最初のステップや必要な公式のヒントを教えてください。
-
-【応答ルール3：途中式の判定（採点モード）】
-ユーザーが「この途中式は正しいか？」や「次のステップはこうですか？」という形で
-具体的な式や手順を提示した場合、あなたは教師としてその式が正しいか間違っているかを判断します。
-正しい場合は「その通りです。」と肯定し、
-間違っている場合は「残念ながら、ここが間違っています。もう一度確認しましょう。」と
-優しくフィードバックしてください。
+【ルール1】 事実・定義などの質問 → 直接簡潔に答える。
+【ルール2】 思考・計算・論理の質問 → 解法のヒントのみ。
+【ルール3】 途中式の確認 → 正しいかどうかだけ返答。
 """
 
 # -----------------------------------------------------
@@ -38,11 +26,11 @@ TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
 
-# --- APIキー読み込み ---
+# --- APIキー ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except KeyError:
-    st.error("APIキーが設定されていません。Streamlit Cloudのシークレットに設定してください。")
+    st.error("APIキーが設定されていません。Streamlit Cloudのシークレットを設定してください。")
     st.stop()
 
 
@@ -113,7 +101,6 @@ def base64_to_audio_url(base64_data, sample_rate):
 
 
 def generate_and_play_tts(text):
-    """Gemini TTSで音声生成＋自動再生"""
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -135,41 +122,33 @@ def generate_and_play_tts(text):
             audio_data = part.get('inlineData', {})
             if audio_data and audio_data.get('data'):
                 mime_type = audio_data.get('mimeType', 'audio/L16;rate=24000')
-                try:
-                    sample_rate = int(mime_type.split('rate=')[1])
-                except IndexError:
-                    sample_rate = 24000
+                sample_rate = int(mime_type.split('rate=')[1]) if 'rate=' in mime_type else 24000
                 base64_to_audio_url(audio_data['data'], sample_rate)
                 return True
             st.error("音声データを取得できませんでした。")
             return False
-        except requests.exceptions.HTTPError as e:
-            if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
-                time.sleep(2 ** attempt)
-                continue
-            st.error(f"APIエラー: {e}")
-            return False
         except Exception as e:
-            st.error(f"予期せぬエラー: {e}")
+            st.error(f"TTSエラー: {e}")
             return False
     return False
 
 
 # -----------------------------------------------------
-# --- 音声入力UI（確実に反応する改良版） ---
+# --- 音声入力UI ---
 # -----------------------------------------------------
 def speech_to_text_ui():
     st.markdown("### 🎙️ 音声で質問する")
-
     html_code = """
     <script>
     let recognizing = false;
+    let recognition;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
+        recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = false;
+        recognition.continuous = false;
 
         function startRecognition() {
             if (!recognizing) {
@@ -185,15 +164,18 @@ def speech_to_text_ui():
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            window.parent.postMessage({ type: 'streamlit:setComponentValue', value: transcript }, '*');
+            const inputBox = window.parent.document.querySelector('textarea');
+            if (inputBox) {
+                inputBox.value = transcript;
+                const enterEvent = new KeyboardEvent('keydown', {{ key: 'Enter', bubbles: true }});
+                inputBox.dispatchEvent(enterEvent);
+            }
             document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
         };
 
         recognition.onerror = function(event) {
             document.getElementById('mic-status').innerText = '⚠️ エラー: ' + event.error;
         };
-    } else {
-        document.getElementById('mic-status').innerText = 'このブラウザは音声認識をサポートしていません。';
     }
     </script>
 
@@ -202,23 +184,14 @@ def speech_to_text_ui():
     """
     components.html(html_code, height=120)
 
-    # JavaScriptからの入力値を受け取る
-    speech_input = components.declare_component("speech_input", default=None)
-    result = speech_input()
-
-    if result:
-        st.session_state["pending_prompt"] = result
-        st.success(f"🎤 認識結果: {result}")
-
 
 # -----------------------------------------------------
-# --- Streamlitアプリ本体 ---
+# --- Streamlit本体 ---
 # -----------------------------------------------------
 st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー")
 st.caption("私は対話型AIユッキーだよ。数学の問題など思考する問題の答えは教えないからね💕")
 
-# Gemini初期化
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
 
@@ -232,24 +205,17 @@ AI_AVATAR = "yukki-icon.jpg"
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 履歴表示
+# 履歴
 for message in st.session_state.messages:
-    avatar_icon = USER_AVATAR if message["role"] == "user" else AI_AVATAR
-    with st.chat_message(message["role"], avatar=avatar_icon):
+    avatar = USER_AVATAR if message["role"] == "user" else AI_AVATAR
+    with st.chat_message(message["role"], avatar=avatar):
         st.markdown(message["content"])
 
-# 🎙 音声入力UI
+# 🎤 音声入力UI
 speech_to_text_ui()
 
-# --- ユーザー入力処理（音声 or 文字） ---
-prompt = st.chat_input("質問を入力してください...")
-
-# 音声入力があれば優先
-if "pending_prompt" in st.session_state and st.session_state["pending_prompt"]:
-    prompt = st.session_state["pending_prompt"]
-    st.session_state["pending_prompt"] = ""
-
-if prompt:
+# --- 入力処理 ---
+if prompt := st.chat_input("質問を入力してください..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
