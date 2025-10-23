@@ -91,7 +91,7 @@ if audio_data:
             st.success(f"🗣️ 認識結果: {prompt}")
 
             # ==== Geminiチャット ====
-            with st.chat_message("user", avatar=USER_AVATAR):
+            with st.chat_message("user"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant", avatar=yukki-icon.jpg):
