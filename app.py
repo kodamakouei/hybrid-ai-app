@@ -95,6 +95,28 @@ def generate_and_play_tts(text):
 # ===============================
 # Streamlit UI
 # ===============================
+
+# ★★★ 修正箇所 1: アバターサイズを大きくするためのカスタムCSSを注入 ★★★
+# CSSは、Streamlitのチャットメッセージ内の画像（アバター）をターゲットにサイズを64pxに固定します。
+st.markdown("""
+<style>
+/* Chat Message Avatar Image (User and Assistant) */
+div[data-testid="stChatMessage"] img {
+    width: 64px !important;
+    height: 64px !important;
+    min-width: 64px !important;
+    min-height: 64px !important;
+    object-fit: cover !important; 
+}
+/* ユーザーアバター（絵文字）を大きく見せるための調整 */
+div[data-testid="stChatMessage"] .st-emotion-cache-1f1f2x2 {
+    font-size: 38px !important; 
+}
+
+</style>
+""", unsafe_allow_html=True)
+# ★★★ 修正箇所 1 終了 ★★★
+
 st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("🎓 ユッキー（音声入力対応）")
 
