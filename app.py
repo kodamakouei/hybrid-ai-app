@@ -115,7 +115,7 @@ if prompt_text:
     with st.chat_message("user"):
         st.markdown(prompt_text)
 
-    with st.chat_message("assistant", avatar=AI_AVATAR):
+    with st.chat_message("assistant", avatar=yukki-icon.jpg):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt_text)
             answer = response.text.strip()
