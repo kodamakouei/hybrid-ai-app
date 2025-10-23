@@ -102,10 +102,10 @@ st.markdown("""
 <style>
 /* Chat Message Avatar Image (User and Assistant) */
 div[data-testid="stChatMessage"] img {
-    width: 1000px !important;
-    height: 1000px !important;
-    min-width: 1000px !important;
-    min-height: 1000px !important;
+    width: 500px !important;
+    height: 500px !important;
+    min-width: 500px !important;
+    min-height: 500px !important;
     object-fit: cover !important; 
 }
 /* ユーザーアバター（絵文字）を大きく見せるための調整 */
