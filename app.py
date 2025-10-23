@@ -29,9 +29,8 @@ except KeyError:
     st.error("❌ Streamlit Secrets に GEMINI_API_KEY が設定されていません。")
     st.stop()
 
-# ===================== TTS（音声生成） =====================
+# ===================== TTS =====================
 def play_tts(text: str):
-    """Gemini TTSで音声を生成して再生"""
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -40,10 +39,8 @@ def play_tts(text: str):
         },
         "model": TTS_MODEL
     }
-    headers = {"Content-Type": "application/json"}
-    r = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+    r = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
     result = r.json()
-
     try:
         audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
         st.audio(base64.b64decode(audio_data), format="audio/wav")
@@ -55,7 +52,7 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー 🎀")
 st.caption("音声でも文字でも質問できるAIだよ。思考系問題はヒントだけね💕")
 
-# Geminiチャットモデル初期化
+# Geminiチャット初期化
 genai.configure(api_key=API_KEY)
 if "chat" not in st.session_state:
     model_chat = genai.GenerativeModel("gemini-2.5-flash")
@@ -64,33 +61,14 @@ if "chat" not in st.session_state:
 
 # ===================== 音声入力 =====================
 st.markdown("### 🎙️ 音声で質問する")
-
-audio_data = mic_recorder(
-    start_prompt="🎤 話す",
-    stop_prompt="🛑 停止",
-    just_once=True,
-    use_container_width=True,
-)
+audio_data = mic_recorder(start_prompt="🎤 話す", stop_prompt="🛑 停止", just_once=True, use_container_width=True)
 
 if audio_data:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    # ==== Whisper API呼び出し（multipart/form-data） ====
-
     files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
     r = requests.post(f"{STT_URL}?key={API_KEY}", files=files)
-
-    if r.headers.get("Content-Type") == "application/json":
-      result = r.json()
-      prompt = result["text"].strip()
-      st.success(f"🗣️ 認識結果: {prompt}")
-    else:
-      st.error("音声認識APIがJSONを返しませんでした。")
-      st.text(r.text)  # 返ってきたエラー内容を確認
-
-
-    r = requests.post(STT_URL, headers=headers, files=files)
 
     if r.headers.get("Content-Type") == "application/json":
         result = r.json()
@@ -98,8 +76,8 @@ if audio_data:
             prompt = result["text"].strip()
             st.success(f"🗣️ 認識結果: {prompt}")
 
-            # ==== Geminiチャット ====
-            with st.chat_message("user"):
+            # ==== チャット ====
+            with st.chat_message("user", avatar="🧑"):
                 st.markdown(prompt)
 
             with st.chat_message("assistant", avatar="yukki-icon.jpg"):
@@ -118,9 +96,8 @@ if audio_data:
 
 # ===================== テキスト入力 =====================
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
-
 if prompt_text:
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt_text)
 
     with st.chat_message("assistant", avatar="yukki-icon.jpg"):
