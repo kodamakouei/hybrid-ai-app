@@ -21,14 +21,26 @@ except KeyError:
     st.error("❌ Streamlit Secrets に GEMINI_API_KEY が設定されていません。")
     st.stop()
 
+# ===================== Gemini 初期化 =====================
+genai.configure(api_key=API_KEY)
+
+# モデルを初期化
+if "model" not in st.session_state:
+    st.session_state.model = genai.GenerativeModel("gemini-1.5-flash")
+
+if "chat" not in st.session_state:
+    st.session_state.chat = st.session_state.model.start_chat(history=[])
+
 # ===================== TTS（音声生成）関数 =====================
-def play_tts(text):
+def play_tts(text: str):
     """Gemini TTSで音声を生成して再生"""
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
-            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}},
+            "speechConfig": {
+                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}
+            },
         },
         "model": TTS_MODEL,
     }
@@ -47,17 +59,6 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー 🎀")
 st.caption("音声でも文字でも質問できるAIだよ。思考系問題はヒントだけね💕")
 
-# Geminiクライアント初期化
-if "client" not in st.session_state:
-    genai.configure(api_key=API_KEY)
-    st.session_state.client = genai.GenerativeModel("gemini-1.5-flash")  # ここでモデル指定
-
-if "chat" not in st.session_state:
-    st.session_state.chat = st.session_state.client.chats.create(
-        model="gemini-2.5-flash", 
-        config={"system_instruction": SYSTEM_PROMPT}
-    )
-
 # ===================== 音声録音ボタン =====================
 st.markdown("### 🎙️ 音声で質問する")
 
@@ -73,11 +74,10 @@ if audio_data:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    client = st.session_state.client
-
-    result = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=[
+    # 音声をテキストに変換
+    model_audio = genai.GenerativeModel("gemini-1.5-flash")
+    result = model_audio.generate_content(
+        [
             {
                 "role": "user",
                 "parts": [
@@ -95,7 +95,7 @@ if audio_data:
         response = st.session_state.chat.send_message(prompt)
         answer = response.text.strip()
 
-        st.markdown(answer)
+        st.chat_message("assistant").markdown(answer)
         play_tts(answer)
 
 # ===================== テキスト入力もサポート =====================
