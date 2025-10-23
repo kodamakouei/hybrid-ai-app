@@ -1,4 +1,4 @@
+google-generativeai>=0.8.3
 streamlit
-google-generativeai
-requests
 streamlit-mic-recorder
+requests
