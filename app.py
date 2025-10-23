@@ -112,7 +112,7 @@ if audio_data:
 prompt_text = st.chat_input("✍️ 質問を入力してください（または上で話しかけてね）")
 
 if prompt_text:
-    with st.chat_message("user", avatar=USER_AVATAR):
+    with st.chat_message("user"):
         st.markdown(prompt_text)
 
     with st.chat_message("assistant", avatar=AI_AVATAR):
