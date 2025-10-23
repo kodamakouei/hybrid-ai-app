@@ -180,18 +180,14 @@ def speech_to_text_ui():
 
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
-            
-            // Streamlit の textarea に値をセットして送信
+
+            // Streamlit chat_input に文字起こしを表示
             const stInput = window.parent.document.querySelector('textarea[data-testid="stTextArea"]');
             if (stInput) {
-                stInput.value = transcript;
-                stInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-                // Enter キーイベントを発火
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true });
-                stInput.dispatchEvent(enterEvent);
+                stInput.value = transcript;  // 文字起こしをセット
+                stInput.dispatchEvent(new Event('input', { bubbles: true })); // 反映させる
             }
-            
+
             document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
         };
 
@@ -207,6 +203,7 @@ def speech_to_text_ui():
     <p id="mic-status">マイク停止中</p>
     """
     components.html(html_code, height=120)
+
 
 
 
