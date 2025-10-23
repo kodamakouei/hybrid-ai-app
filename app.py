@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_mic_recorder import mic_recorder
-from google import genai
+import google.generativeai as genai
 import base64
 import requests
 import json
