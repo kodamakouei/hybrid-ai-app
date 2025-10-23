@@ -1,4 +1,4 @@
-
-
-google-genai
- 
+streamlit
+google-generativeai
+requests
+streamlit-mic-recorder
