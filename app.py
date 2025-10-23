@@ -21,9 +21,8 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 
-# Whisper STT (Gemini generateContent)
-STT_MODEL = "whisper-1"
-STT_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{STT_MODEL}:generateContent"
+# Whisper STT
+STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/whisper-1:transcribe"
 
 # ===================== APIキー =====================
 try:
@@ -70,30 +69,23 @@ if audio_data and len(audio_data["bytes"]) > 0:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    # ===== 音声を base64 に変換 =====
-    audio_b64 = base64.b64encode(audio_data["bytes"]).decode("utf-8")
-    payload = {
-        "model": STT_MODEL,
-        "responseModalities": ["TEXT"],
-        "inputAudio": {
-            "audioFormat": "WEBM_OPUS",
-            "audioData": audio_b64
-        }
-    }
+    # ===== Whisper API に音声ファイルを送信 =====
+    headers = {"Authorization": f"Bearer {API_KEY}"}
+    files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
 
-    r = requests.post(f"{STT_URL}?key={API_KEY}", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
+    r = requests.post(STT_URL, headers=headers, files=files)
 
     if "application/json" in r.headers.get("Content-Type", ""):
         result = r.json()
         try:
-            prompt = result["candidates"][0]["content"][0]["text"].strip()
+            prompt = result["text"].strip()
             st.success(f"🗣️ 認識結果: {prompt}")
 
             # ===== チャット =====
             with st.chat_message("user", avatar=USER_AVATAR):
                 st.markdown(prompt)
 
-            with st.chat_message("assistant", avatar="yukki-icon.jpg"):
+            with st.chat_message("assistant", avatar=AI_AVATAR):
                 with st.spinner("ユッキーが考え中..."):
                     response = st.session_state.chat.send_message(prompt)
                     answer = response.text.strip()
@@ -113,7 +105,7 @@ if prompt_text:
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt_text)
 
-    with st.chat_message("assistant", avatar="yukki-icon.jpg"):
+    with st.chat_message("assistant", avatar=AI_AVATAR):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt_text)
             answer = response.text.strip()
