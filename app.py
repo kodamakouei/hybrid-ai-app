@@ -14,15 +14,16 @@ SYSTEM_PROMPT = """
 """
 
 USER_AVATAR = "🧑"
-AI_AVATAR = "assets/yukki-icon.jpg"  # Streamlit内に配置した画像
+AI_AVATAR = "assets/yukki-icon.jpg"  # Streamlit 内に置いた画像
 
 # TTS (Gemini)
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 
-# Whisper STT
-STT_URL = "https://generativelanguage.googleapis.com/v1beta/models/whisper-1:transcribe"
+# Whisper STT (Gemini generateContent)
+STT_MODEL = "whisper-1"
+STT_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{STT_MODEL}:generateContent"
 
 # ===================== APIキー =====================
 try:
@@ -44,7 +45,7 @@ def play_tts(text: str):
     r = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
     result = r.json()
     try:
-        audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        audio_data = result["candidates"][0]["content"][0]["inlineData"]["data"]
         st.audio(base64.b64decode(audio_data), format="audio/wav")
     except Exception as e:
         st.warning(f"音声生成に失敗しました: {e}")
@@ -69,22 +70,30 @@ if audio_data and len(audio_data["bytes"]) > 0:
     st.audio(audio_data["bytes"])
     st.info("🧠 音声認識中...")
 
-    files = {"file": ("audio.webm", audio_data["bytes"], "audio/webm")}
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    
-    r = requests.post(STT_URL, headers=headers, files=files)
+    # ===== 音声を base64 に変換 =====
+    audio_b64 = base64.b64encode(audio_data["bytes"]).decode("utf-8")
+    payload = {
+        "model": STT_MODEL,
+        "responseModalities": ["TEXT"],
+        "inputAudio": {
+            "audioFormat": "WEBM_OPUS",
+            "audioData": audio_b64
+        }
+    }
+
+    r = requests.post(f"{STT_URL}?key={API_KEY}", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
 
     if "application/json" in r.headers.get("Content-Type", ""):
         result = r.json()
         try:
-            prompt = result.get("text", "").strip()
+            prompt = result["candidates"][0]["content"][0]["text"].strip()
             st.success(f"🗣️ 認識結果: {prompt}")
 
-            # ==== チャット ====
+            # ===== チャット =====
             with st.chat_message("user", avatar=USER_AVATAR):
                 st.markdown(prompt)
 
-            with st.chat_message("assistant", avatar=AI_AVATAR):
+            with st.chat_message("assistant", avatar="yukki-icon.jpg"):
                 with st.spinner("ユッキーが考え中..."):
                     response = st.session_state.chat.send_message(prompt)
                     answer = response.text.strip()
@@ -104,7 +113,7 @@ if prompt_text:
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt_text)
 
-    with st.chat_message("assistant", avatar=AI_AVATAR):
+    with st.chat_message("assistant", avatar="yukki-icon.jpg"):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt_text)
             answer = response.text.strip()
