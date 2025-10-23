@@ -18,7 +18,6 @@ SYSTEM_PROMPT = """
 
 【応答ルール2：計算・思考・問題解決の質問（解法ガイド）】
 質問が、**計算**、**分析**、**プログラミング**、**論理的な思考**を尋ねるものである場合、**最終的な答えや途中式は絶対に教えないでください**。代わりに、ユーザーが次に取るべき**最初の、最も重要な解法のステップ**や**必要な公式のヒント**を教えることで、ユーザーの自習を促してください。
-例：「積分の問題」→「まずは部分分数分解を行うと良いでしょう。」
 
 【応答ルール3：途中式の判定（採点モード）】
 ユーザーが「この途中式は正しいか？」や「次のステップはこうですか？」という形で**具体的な式や手順**を提示した場合、あなたは**教師としてその式が正しいか間違っているかを判断**し、正しい場合は「その通りです。」と肯定し、間違っている場合は「残念ながら、ここが間違っています。もう一度確認しましょう。」と**間違いの場所や種類を具体的に指摘せずに**優しくフィードバックしてください。
@@ -38,7 +37,6 @@ try:
 except KeyError:
     st.error("APIキーが設定されていません。Streamlit Cloudのシークレットを設定してください。")
     st.stop()
-
 
 # -----------------------------------------------------
 # --- 音声を自動再生するための関数 ---
@@ -105,7 +103,6 @@ def base64_to_audio_url(base64_data, sample_rate):
     """
     components.html(js_code, height=0, width=0)
 
-
 def generate_and_play_tts(text):
     """Gemini TTSで音声生成＋自動再生"""
     payload = {
@@ -116,7 +113,6 @@ def generate_and_play_tts(text):
         },
         "model": TTS_MODEL,
     }
-
     headers = {'Content-Type': 'application/json'}
 
     for attempt in range(MAX_RETRIES):
@@ -148,63 +144,49 @@ def generate_and_play_tts(text):
             return False
     return False
 
-
 # -----------------------------------------------------
-# --- 音声入力UI（Web Speech API） ---
+# --- 音声入力UI（Web Speech API + text_input 経由） ---
 # -----------------------------------------------------
 def speech_to_text_ui():
     st.markdown("### 🎙️ 音声で質問する")
-    html_code = """
+    text_input_key = "speech_text"
+    # hidden text_input を経由して文字起こし
+    st.text_input("文字起こし結果（非表示）", key=text_input_key, label_visibility="collapsed")
+
+    html_code = f"""
     <script>
-    let recognizing = false;
     let recognition;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (SpeechRecognition) {
+    if (SpeechRecognition) {{
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = false;
         recognition.continuous = false;
 
-        function startRecognition() {
-            if (!recognizing) {
-                recognizing = true;
-                recognition.start();
-                document.getElementById('mic-status').innerText = '🎧 聴き取り中...';
-            } else {
-                recognizing = false;
-                recognition.stop();
-                document.getElementById('mic-status').innerText = 'マイク停止中';
-            }
-        }
+        function startRecognition() {{
+            recognition.start();
+        }}
 
-        recognition.onresult = function(event) {
+        recognition.onresult = function(event) {{
             const transcript = event.results[0][0].transcript;
+            // Streamlit の text_input に値をセット
+            const inputElem = window.parent.document.querySelector('input[data-testid="stTextInput"][id^="widget-{text_input_key}"]');
+            if (inputElem) {{
+                inputElem.value = transcript;
+                inputElem.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            }}
+        }};
 
-            // Streamlit chat_input に文字起こしを表示
-            const stInput = window.parent.document.querySelector('textarea[data-testid="stTextArea"]');
-            if (stInput) {
-                stInput.value = transcript;  // 文字起こしをセット
-                stInput.dispatchEvent(new Event('input', { bubbles: true })); // 反映させる
-            }
-
-            document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
-        };
-
-        recognition.onerror = function(event) {
-            document.getElementById('mic-status').innerText = '⚠️ エラー: ' + event.error;
-        };
-    } else {
-        document.getElementById('mic-status').innerText = 'このブラウザは音声認識をサポートしていません。';
-    }
+        recognition.onerror = function(event) {{
+            console.log('SpeechRecognition error:', event.error);
+        }};
+    }}
     </script>
 
     <button onclick="startRecognition()">🎤 話す / 停止</button>
-    <p id="mic-status">マイク停止中</p>
     """
-    components.html(html_code, height=120)
-
-
+    components.html(html_code, height=80)
 
 # -----------------------------------------------------
 # --- Streamlitアプリ本体 ---
@@ -213,7 +195,7 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 st.title("ユッキー")
 st.caption("私は対話型AIユッキーだよ。数学の問題など思考する問題の答えは教えないからね💕")
 
-# --- Gemini初期化 ---
+# Gemini初期化
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
 
@@ -233,7 +215,7 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"], avatar=avatar_icon):
         st.markdown(message["content"])
 
-# 🎤 音声入力UI追加！
+# 音声入力UI
 speech_to_text_ui()
 
 # --- ユーザー入力処理 ---
@@ -249,10 +231,7 @@ if prompt := st.chat_input("質問を入力してください..."):
                 response_text = response.text
                 st.markdown(response_text)
                 st.info("🔊 音声応答を準備中...")
-                if generate_and_play_tts(response_text):
-                    st.empty()
-                else:
-                    st.error("音声生成に失敗しました。")
+                generate_and_play_tts(response_text)
                 st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
                 st.error(f"APIエラーが発生しました: {e}")
