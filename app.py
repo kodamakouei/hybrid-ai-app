@@ -38,7 +38,7 @@ except KeyError:
     st.stop()
 
 # -----------------------------------------------------
-# TTS生成関数（JS {} 衝突修正済み）
+# TTS生成関数
 # -----------------------------------------------------
 @st.cache_data
 def base64_to_audio_url(base64_data, sample_rate):
@@ -122,13 +122,10 @@ def generate_and_play_tts(text):
     return False
 
 # -----------------------------------------------------
-# 音声入力UI
+# 音声入力UI（chat_input 自動送信対応）
 # -----------------------------------------------------
 def speech_to_text_ui():
     st.markdown("### 🎙️ 音声で質問する")
-    text_input_key="speech_text"
-    st.text_input("文字起こし結果", key=text_input_key, label_visibility="collapsed")
-
     html_code=f"""
     <script>
     let recognizing=false;
@@ -155,10 +152,12 @@ def speech_to_text_ui():
 
         recognition.onresult=function(event){{
             const transcript=event.results[0][0].transcript;
-            const inputElem=window.parent.document.querySelector('input[data-testid^="stTextInput"][id^="widget-{text_input_key}"]');
-            if(inputElem){{
-                inputElem.value=transcript;
-                inputElem.dispatchEvent(new Event('input',{{bubbles:true}}));
+            // chat_input に自動入力
+            const chatInput=window.parent.document.querySelector('input[data-testid="stChatInput"]');
+            if(chatInput){{
+                chatInput.value=transcript;
+                const enterEvent=new KeyboardEvent('keydown',{{key:'Enter',bubbles:true}});
+                chatInput.dispatchEvent(enterEvent);
             }}
             document.getElementById('mic-status').innerText='✅ 認識完了: '+transcript;
             recognizing=false;
@@ -177,7 +176,7 @@ def speech_to_text_ui():
     <button onclick="toggleRecognition()">🎤 話す / 停止</button>
     <p id="mic-status">マイク停止中</p>
     """
-    components.html(html_code,height=80)
+    components.html(html_code,height=100)
 
 # -----------------------------------------------------
 # Streamlit 本体
