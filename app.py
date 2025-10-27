@@ -89,7 +89,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
-# ★★★ 変更点：新しいプロンプトを管理する変数を追加 ★★★
 if "new_prompt" not in st.session_state:
     st.session_state.new_prompt = None
 
@@ -100,8 +99,7 @@ with st.sidebar:
     <style>
     section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
     .main {{ background-color: #FFFFFF !important; }}
-    .st-emotion-cache-1y4p8pa {{ display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }}
-    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
+    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; margin: 20px auto; display: block; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     <script>
@@ -172,16 +170,16 @@ function startRec() {{
 </script>
 """, height=130)
 
-# ★★★ 変更点：入力があった場合、セッションステートに保存 ★★★
+# 入力があった場合、セッションステートに保存
 if prompt:
     st.session_state.new_prompt = prompt
 if voice_prompt:
     st.session_state.new_prompt = voice_prompt
 
-# ★★★ 変更点：セッションステートのプロンプトを処理し、処理後にクリアする ★★★
+# セッションステートのプロンプトを処理し、処理後にクリアする
 if st.session_state.new_prompt:
     final_prompt = st.session_state.new_prompt
-    st.session_state.new_prompt = None  # ★ 入力値を即座にクリア
+    st.session_state.new_prompt = None  # 入力値を即座にクリア
 
     st.session_state.messages.append({"role": "user", "content": final_prompt})
     
@@ -202,3 +200,4 @@ if st.session_state.new_prompt:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていません。"})
     
     st.rerun()
+    
