@@ -97,17 +97,20 @@ img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_imag
 
 st.markdown(f"""
 <style>
-/* Streamlitのメインコンテナのデフォルトpaddingをリセット */
+/* Streamlitのメインコンテンツ領域に左マージンを追加 */
 .main .block-container {{
-    padding: 0 !important;
+    padding-left: 360px !important;
+    padding-right: 2rem !important;
+    padding-top: 2rem !important;
+    padding-bottom: 7rem !important;
 }}
 
 /* 左側の固定アバター領域 */
 .avatar-container {{
     position: fixed;
-    left: 0;
+    left: 20px;
     top: 0;
-    width: 340px;
+    width: 320px;
     height: 100vh;
     display: flex;
     align-items: center;
@@ -121,12 +124,6 @@ st.markdown(f"""
     border: 2px solid #f0a;
     object-fit: cover;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}}
-
-/* 右側のスクロール可能なコンテンツ領域 */
-.content-container {{
-    margin-left: 340px; /* アバター領域の幅だけ左にマージンを作成 */
-    padding: 2rem 2rem 7rem 2rem; /* 上下左右の余白と、下部入力欄のスペース確保 */
 }}
 
 /* チャット入力ボックスを画面下部全体に固定 */
@@ -172,8 +169,7 @@ window.stopTalking = function() {{
 </script>
 """, unsafe_allow_html=True)
 
-# --- 右側のコンテンツをラップするコンテナを開始 ---
-st.markdown('<div class="content-container">', unsafe_allow_html=True)
+# --- ここから下のコンテンツはすべて、CSSによって右側に表示されます ---
 
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
@@ -224,10 +220,6 @@ st.subheader("ユッキーとの会話履歴")
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
         st.markdown(msg["content"])
-
-# --- 右側のコンテンツをラップするコンテナを閉じる ---
-st.markdown('</div>', unsafe_allow_html=True)
-
 
 # --- チャット入力と処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
