@@ -24,7 +24,7 @@ except:
     API_KEY = ""
 
 # ===============================
-# アバター画像取得
+# アバター画像取得 (キャッシュ)
 # ===============================
 @st.cache_data
 def get_avatar_images():
@@ -75,7 +75,6 @@ def play_tts_with_lip(text):
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
         return
 
-    # components.htmlではなく、st.markdownでJavaScriptを実行
     st.markdown(f"""
     <script>
     if (window.startTalking) window.startTalking();
@@ -99,17 +98,14 @@ img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_imag
 
 st.markdown(f"""
 <style>
-/* Streamlitのメインコンテンツコンテナのクラス名を特定してスタイルを適用 */
-/* このクラス名はStreamlitのバージョンによって変わる可能性があります */
-div.st-emotion-cache-1y4p8pa {{
-    padding-left: 340px; /* アバターの幅 + 余白 */
-    padding-top: 2rem;
-    padding-bottom: 6rem; /* 下部入力欄との余白 */
+/* Streamlitのメインコンテンツ領域をターゲットにする、より安定したセレクタ */
+section.main > div:has(> [data-testid="stVerticalBlock"]) {{
+    padding-left: 340px !important; /* アバターの幅 + 余白 (強制適用) */
 }}
 
 /* アバターを配置するコンテナのスタイル */
 .avatar-container {{
-    position: fixed; /* スクロールしても位置を固定 */
+    position: fixed; /* スクロールしてもビューポートに対して位置を固定 */
     top: 80px;
     left: 20px;
     width: 300px;
@@ -136,6 +132,11 @@ div[data-testid="stChatInputContainer"] {{
     background-color: white;
     z-index: 101; /* 最前面に */
     border-top: 1px solid #e6e6e6;
+}}
+
+/* メインコンテンツが下部の入力ボックスに隠れないようにする */
+.main .block-container {{
+    padding-bottom: 6rem !important; 
 }}
 </style>
 
