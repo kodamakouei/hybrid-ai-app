@@ -83,6 +83,7 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
+# チャットセッションは後から作成するので、ここではNoneで初期化
 if "chat" not in st.session_state:
     st.session_state.chat = None
 if "messages" not in st.session_state:
@@ -92,85 +93,9 @@ if "audio_to_play" not in st.session_state:
 if "processing" not in st.session_state:
     st.session_state.processing = False
 
-# --- 処理中フラグを、毎回の実行開始時にリセットする ---
-if st.session_state.processing:
-    st.session_state.processing = False
-
 # --- サイドバー ---
 with st.sidebar:
-    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-    st.markdown(f"""
-    <style>
-    section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
-    .main {{ background-color: #FFFFFF !important; }}
-    .st-emotion-cache-1y4p8pa {{ display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }}
-    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
-    </style>
-    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-    <script>
-    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
-    let talkingInterval = null;
-    window.startTalking = function() {{
-        const avatar = document.getElementById('avatar');
-        if (!avatar || !{'true' if has_images else 'false'}) return;
-        let toggle = false;
-        if (talkingInterval) clearInterval(talkingInterval);
-        talkingInterval = setInterval(() => {{ avatar.src = toggle ? imgOpenBase64 : imgCloseBase64; toggle = !toggle; }}, 160);
-    }}
-    window.stopTalking = function() {{
-        if (talkingInterval) clearInterval(talkingInterval);
-        const avatar = document.getElementById('avatar');
-        if (avatar && {'true' if has_images else 'false'}) {{ avatar.src = imgCloseBase64; }}
-    }}
-    </script>
-    """, unsafe_allow_html=True)
-
-# --- 音声再生トリガー ---
-if st.session_state.get("audio_to_play"):
-    st.sidebar.markdown(f"""
-    <script>
-    if (window.startTalking) window.startTalking();
-    const audio = new Audio('data:audio/wav;base64,{st.session_state.audio_to_play}');
-    audio.autoplay = true;
-    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-    audio.play().catch(e => {{ console.error("Audio playback failed:", e); if (window.stopTalking) window.stopTalking(); }});
-    </script>
-    """, unsafe_allow_html=True)
-    st.session_state.audio_to_play = None
-
-# --- メインコンテンツ ---
-st.title("🎀 ユッキー")
-st.subheader("ユッキーとの会話履歴")
-
-# ★★★ 変更点：入力ウィジェットを先に配置 ★★★
-prompt = st.chat_input("質問を入力してください...")
-st.subheader("音声入力")
-voice_prompt = components.html("""
-<div id="mic-container">
-    <button onclick="startRec()">🎙 話す</button>
-    <p id="mic-status">マイク停止中</p>
-</div>
-<script>
-function startRec() {{
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {{ document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。"; return; }}
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.continuous = false;
-    document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-    recognition.start();
-    recognition.onresult = (event) => {{
-        const text = event.results[0][0].transcript;
-        document.getElementById("mic-status").innerText = "✅ " + text;
-        window.parent.Streamlit.setComponentValue(text);
-    }};
-    recognition.onerror = (e) => {{ document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; }};
-    recognition.onend = () => {{ if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }}
-}}
-</script>
-""", height=130)
-
+// ...existing code...
 if voice_prompt:
     prompt = voice_prompt
 
@@ -178,14 +103,14 @@ if voice_prompt:
 if prompt and not st.session_state.processing:
     st.session_state.processing = True
 
-    # ユーザーのメッセージを履歴に追加
+    # ユーザーのメッセージを履歴に追加して表示
     st.session_state.messages.append({"role": "user", "content": prompt})
     
     # AIの応答を処理
     if st.session_state.client:
         try:
             # チャットセッションがまだなければ、ここで作成する
-            if st.session_state.chat is None:
+            if "chat" not in st.session_state or st.session_state.chat is None:
                 config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
                 st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
 
@@ -200,11 +125,6 @@ if prompt and not st.session_state.processing:
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
-    # ページを再実行し、現在のスクリプトの実行を即座に停止する
+    # 処理完了後、フラグをリセットして再実行
+    st.session_state.processing = False
     st.rerun()
-    st.stop()
-
-# ★★★ 変更点：チャット履歴の表示を最後に移動 ★★★
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-        st.markdown(msg["content"])
