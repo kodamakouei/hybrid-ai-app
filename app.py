@@ -101,6 +101,10 @@ with st.sidebar:
     # アバターと口パク用のCSSとHTML
     st.markdown(f"""
     <style>
+    /* サイドバー自体の幅を広げる */
+    section[data-testid="stSidebar"] {{
+        width: 450px !important; /* 画像サイズ(400px)より少し大きく設定 */
+    }}
     /* サイドバーの中央にアバターを配置 */
     .st-emotion-cache-1y4p8pa {{
         display: flex;
