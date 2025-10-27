@@ -78,14 +78,14 @@ def play_tts_with_lip(text):
     # st.sidebar にスクリプトを注入
     st.sidebar.markdown(f"""
     <script>
-    // サイドバーの startTalking/stopTalking を呼び出す
-    if (window.parent.startTalking) window.parent.startTalking();
+    // サイドバー内で定義された関数を直接呼び出す
+    if (window.startTalking) window.startTalking();
     const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
     audio.autoplay = true;
-    audio.onended = () => {{ if (window.parent.stopTalking) window.parent.stopTalking(); }};
+    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
     audio.play().catch(e => {{
         console.error("Audio playback failed:", e);
-        if (window.parent.stopTalking) window.parent.stopTalking(); 
+        if (window.stopTalking) window.stopTalking(); 
     }});
     </script>
     """, unsafe_allow_html=True)
