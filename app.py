@@ -141,10 +141,11 @@ if st.session_state.get("audio_to_play"):
 
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー")
+st.subheader("ユッキーとの会話履歴")
 
-# --- 入力処理とAPI呼び出し ---
-# このブロックは、新しいプロンプトがある場合にのみ実行される
+# ★★★ 変更点：入力ウィジェットを先に配置 ★★★
 prompt = st.chat_input("質問を入力してください...")
+st.subheader("音声入力")
 voice_prompt = components.html("""
 <div id="mic-container">
     <button onclick="startRec()">🎙 話す</button>
@@ -173,30 +174,37 @@ function startRec() {{
 if voice_prompt:
     prompt = voice_prompt
 
+# --- プロンプト処理とAPI呼び出し ---
 if prompt and not st.session_state.processing:
     st.session_state.processing = True
+
+    # ユーザーのメッセージを履歴に追加
     st.session_state.messages.append({"role": "user", "content": prompt})
     
+    # AIの応答を処理
     if st.session_state.client:
         try:
+            # チャットセッションがまだなければ、ここで作成する
             if st.session_state.chat is None:
                 config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
                 st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
+
             response = st.session_state.chat.send_message(prompt)
             text = response.text
             st.session_state.messages.append({"role": "assistant", "content": text})
             generate_and_store_tts(text)
         except Exception as e:
             error_message = f"API呼び出し中にエラーが発生しました: {e}"
+            st.error(error_message)
             st.session_state.messages.append({"role": "assistant", "content": error_message})
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
+    # ページを再実行し、現在のスクリプトの実行を即座に停止する
     st.rerun()
+    st.stop()
 
-# --- チャット履歴の表示 ---
-# このブロックは、入力処理とは独立して、毎回実行される
-st.subheader("ユッキーとの会話履歴")
+# ★★★ 変更点：チャット履歴の表示を最後に移動 ★★★
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
         st.markdown(msg["content"])
