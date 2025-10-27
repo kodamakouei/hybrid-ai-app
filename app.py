@@ -83,9 +83,12 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
-# チャットセッションは後から作成するので、ここではNoneで初期化
 if "chat" not in st.session_state:
-    st.session_state.chat = None
+    if st.session_state.client:
+        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
+    else:
+        st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
@@ -141,9 +144,11 @@ st.title("🎀 ユッキー")
 
 # チャット履歴
 st.subheader("ユッキーとの会話履歴")
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-        st.markdown(msg["content"])
+chat_container = st.container()
+with chat_container:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+            st.markdown(msg["content"])
 
 # --- 入力処理 ---
 prompt = st.chat_input("質問を入力してください...")
@@ -180,26 +185,17 @@ if voice_prompt:
 # --- プロンプト処理とAPI呼び出し ---
 if prompt and not st.session_state.processing:
     st.session_state.processing = True
-
-    # ユーザーのメッセージを履歴に追加
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # AIの応答を処理
-    if st.session_state.client:
+    if st.session_state.chat:
         try:
-            # チャットセッションがまだなければ、ここで作成する
-            if st.session_state.chat is None:
-                config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-                st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-
             response = st.session_state.chat.send_message(prompt)
             text = response.text
             st.session_state.messages.append({"role": "assistant", "content": text})
             generate_and_store_tts(text)
         except Exception as e:
-            error_message = f"API呼び出し中にエラーが発生しました: {e}"
-            st.error(error_message)
-            st.session_state.messages.append({"role": "assistant", "content": error_message})
+            st.error(f"API呼び出し中にエラーが発生しました: {e}")
+            st.session_state.messages.append({"role": "assistant", "content": f"エラーが発生しました: {e}"})
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
