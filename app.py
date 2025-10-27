@@ -47,9 +47,10 @@ def get_avatar_images():
     if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
         return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
     else:
-        st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示します。")
+        # サイドバーに警告を表示
+        st.sidebar.warning("⚠️ アバター画像ファイルが見つかりません。")
         placeholder_svg = base64.b64encode(
-            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像が見つかりません</text></svg>""".encode('utf-8')
+            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
@@ -74,7 +75,8 @@ def play_tts_with_lip(text):
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
         return
 
-    st.markdown(f"""
+    # st.sidebar にスクリプトを注入
+    st.sidebar.markdown(f"""
     <script>
     if (window.startTalking) window.startTalking();
     const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
@@ -92,85 +94,61 @@ def play_tts_with_lip(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- アバターとレイアウト用CSS/HTML/JSを注入 ---
-img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+# --- サイドバーにアバターと関連要素を配置 ---
+with st.sidebar:
+    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
 
-st.markdown(f"""
-<style>
-/* Streamlitのメインコンテンツ領域に左マージンを追加 */
-.main .block-container {{
-    padding-left: 360px !important;
-    padding-right: 2rem !important;
-    padding-top: 2rem !important;
-    padding-bottom: 7rem !important;
-}}
+    # アバターと口パク用のCSSとHTML
+    st.markdown(f"""
+    <style>
+    /* サイドバーの中央にアバターを配置 */
+    .st-emotion-cache-1y4p8pa {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }}
+    .avatar {{
+        width: 280px;
+        height: 280px;
+        border-radius: 16px;
+        border: 2px solid #f0a;
+        object-fit: cover;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }}
+    </style>
 
-/* 左側の固定アバター領域 */
-.avatar-container {{
-    position: fixed;
-    left: 20px;
-    top: 0;
-    width: 320px;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-}}
-.avatar {{
-    width: 280px;
-    height: 280px;
-    border-radius: 16px;
-    border: 2px solid #f0a;
-    object-fit: cover;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}}
+    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
 
-/* チャット入力ボックスを画面下部全体に固定 */
-div[data-testid="stChatInputContainer"] {{
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    z-index: 101;
-}}
-</style>
+    <script>
+    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
+    let talkingInterval = null;
 
-<!-- 左側のアバターHTML -->
-<div class="avatar-container">
-  <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-</div>
-
-<!-- 口パク制御のJavaScript -->
-<script>
-const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
-let talkingInterval = null;
-
-window.startTalking = function() {{
-    const avatar = document.getElementById('avatar');
-    if ({'true' if has_images else 'false'}) {{ 
-        let toggle = false;
+    window.startTalking = function() {{
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'}) {{ 
+            let toggle = false;
+            if (talkingInterval) clearInterval(talkingInterval);
+            talkingInterval = setInterval(() => {{
+                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
+                toggle = !toggle;
+            }}, 160);
+        }}
+    }}
+    window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
-        talkingInterval = setInterval(() => {{
-            avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
-            toggle = !toggle;
-        }}, 160);
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'}) {{
+            avatar.src = imgCloseBase64;
+        }}
     }}
-}}
-window.stopTalking = function() {{
-    if (talkingInterval) clearInterval(talkingInterval);
-    const avatar = document.getElementById('avatar');
-    if ({'true' if has_images else 'false'}) {{
-        avatar.src = imgCloseBase64;
-    }}
-}}
-</script>
-""", unsafe_allow_html=True)
+    </script>
+    """, unsafe_allow_html=True)
 
-# --- ここから下のコンテンツはすべて、CSSによって右側に表示されます ---
 
+# --- メインコンテンツ ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
 # Geminiクライアントとチャットセッションの初期化
