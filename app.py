@@ -23,8 +23,8 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 # アバター口パクHTML注入
 # ===============================
 def show_avatar():
-    img_close = base64.b64encode(open("yukki_close.jpg", "rb").read()).decode("utf-8")
-    img_open = base64.b64encode(open("yukki_open.jpg", "rb").read()).decode("utf-8")
+    img_close = base64.b64encode(open("yukki-close.jpg", "rb").read()).decode("utf-8")
+    img_open = base64.b64encode(open("yukki-open.jpg", "rb").read()).decode("utf-8")
 
     components.html(f"""
     <style>
@@ -158,7 +158,7 @@ if (SpeechRecognition) {
 # チャットUI
 # ===============================
 for msg in st.session_state.messages:
-    avatar = "🧑" if msg["role"] == "user" else "yukki_close.jpg"
+    avatar = "🧑" if msg["role"] == "user" else "yukki-close.jpg"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -167,7 +167,7 @@ if prompt := st.chat_input("質問を入力してください..."):
     with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="yukki_close.jpg"):
+    with st.chat_message("assistant", avatar="yukki-close.jpg"):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt)
             text = response.text
