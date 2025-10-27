@@ -110,8 +110,8 @@ with st.sidebar:
         height: 100vh;
     }}
     .avatar {{
-        width: 280px;
-        height: 280px;
+        width: 400px;
+        height: 400px;
         border-radius: 16px;
         border: 2px solid #f0a;
         object-fit: cover;
