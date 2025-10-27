@@ -94,6 +94,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
+if "processing" not in st.session_state:
+    st.session_state.processing = False
 
 # --- サイドバーにアバターと口パク用JSを配置 ---
 with st.sidebar:
@@ -221,17 +223,27 @@ function startRec() {
 if voice_prompt:
     prompt = voice_prompt
 
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    if st.session_state.chat:
-        response = st.session_state.chat.send_message(prompt)
-        text = response.text
-        st.session_state.messages.append({"role": "assistant", "content": text})
-        # 音声データを生成してセッションステートに保存
-        generate_and_store_tts(text)
-    else:
-        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
-    # ページを再実行してUIを更新し、音声再生をトリガー
-    st.rerun()
+# promptがあり、かつ現在処理中でない場合のみ実行
+if prompt and not st.session_state.processing:
+    try:
+        # 処理中フラグを立てる
+        st.session_state.processing = True
+        
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        if st.session_state.chat:
+            response = st.session_state.chat.send_message(prompt)
+            text = response.text
+            st.session_state.messages.append({"role": "assistant", "content": text})
+            # 音声データを生成してセッションステートに保存
+            generate_and_store_tts(text)
+        else:
+            st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
+        
+        # ページを再実行してUIを更新し、音声再生をトリガー
+        st.rerun()
+
+    finally:
+        # st.rerun()が実行されるとスクリプトが停止するため、この行は通常は実行されませんが、
+        # 安全のために配置します。再実行後にフラグがリセットされることが重要です。
+        st.session_state.processing = False
