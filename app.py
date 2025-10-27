@@ -18,24 +18,26 @@ SYSTEM_PROMPT = """
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
-API_KEY = st.secrets["GEMINI_API_KEY"]
+# NOTE: APIキーはStreamlitのst.secretsから取得することを想定しています。
+API_KEY = st.secrets["GEMINI_API_KEY"] 
 
 # ===============================
 # アバター表示（口パク付き）
 # ===============================
 def show_avatar():
-    # ✅ ファイル存在チェック
+    # ★実行環境に yukki-close.jpg と yukki-open.jpg が必要です
     if not (os.path.exists("yukki-close.jpg") and os.path.exists("yukki-open.jpg")):
+        # 画像ファイルがない場合はエラーメッセージを表示して停止
         st.error("❌ yukki-close.jpg と yukki-open.jpg が同じフォルダにありません。")
         st.stop()
 
-    # ✅ base64に変換
+    # base64に変換してHTML/JSに埋め込む
     with open("yukki-close.jpg", "rb") as f:
         img_close = base64.b64encode(f.read()).decode("utf-8")
     with open("yukki-open.jpg", "rb") as f:
         img_open = base64.b64encode(f.read()).decode("utf-8")
 
-    # ✅ StreamlitにHTML/JSを埋め込み（口パク制御）
+    # StreamlitにHTML/JSを埋め込み（口パク制御）
     components.html(f"""
     <style>
     .avatar {{
@@ -51,6 +53,7 @@ def show_avatar():
     </div>
 
     <script>
+    // 口パク開始関数
     let talkingInterval = null;
     function startTalking() {{
         const avatar = document.getElementById('avatar');
@@ -58,11 +61,12 @@ def show_avatar():
         if (talkingInterval) clearInterval(talkingInterval);
         talkingInterval = setInterval(() => {{
             avatar.src = toggle
-              ? "data:image/jpeg;base64,{img_open}"
-              : "data:image/jpeg;base64,{img_close}";
+              ? "data:image/jpeg;base64,{img_open}" // 口が開いた画像
+              : "data:image/jpeg;base64,{img_close}"; // 口が閉じた画像
             toggle = !toggle;
-        }}, 160); // ← パクパク速度（ミリ秒）
+        }}, 160); // パクパク速度（ミリ秒）
     }}
+    // 口パク停止関数
     function stopTalking() {{
         clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
@@ -75,6 +79,7 @@ def show_avatar():
 # 音声再生＋口パク制御
 # ===============================
 def play_tts_with_lip(text):
+    # Gemini TTS APIへのペイロード構築
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -83,27 +88,49 @@ def play_tts_with_lip(text):
         },
         "model": TTS_MODEL
     }
+    
     headers = {'Content-Type': 'application/json'}
-    response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
-    result = response.json()
+    
+    # 指数バックオフ付きのAPI呼び出し
+    MAX_RETRIES = 5
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+            response.raise_for_status() # HTTPエラーを確認
+            result = response.json()
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt < MAX_RETRIES - 1:
+                import time
+                wait_time = 2 ** attempt
+                # print(f"API呼び出し失敗。{wait_time}秒後にリトライします。", file=sys.stderr)
+                time.sleep(wait_time)
+            else:
+                st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
+                return
 
     try:
-        audio_data = result["contents"][0]["parts"][0]["inlineData"]["data"]
+        # resultからbase64エンコードされたオーディオデータを抽出
+        audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except Exception:
-        st.error("❌ 音声データ取得失敗")
-        st.json(result)
+        st.error("❌ 音声データ取得失敗: APIレスポンス構造が予期されたものではありません。")
+        # st.json(result) # デバッグ用
         return
 
     audio_bytes = base64.b64decode(audio_data)
 
     # 🎬 JavaScriptで口パクアニメーション制御
+    # 音声の再生と同時に口パクを開始し、7秒後に停止する（再生時間はテキスト長に応じて調整が必要です）
     components.html("""
     <script>
+    // window.startTalkingとwindow.stopTalkingはshow_avatar()で定義されています
     if (window.startTalking) startTalking();
-    setTimeout(() => { if (window.stopTalking) stopTalking(); }, 7000);
+    // ここでは単純に7秒で停止させていますが、実際の音声再生終了イベントに連動させるのが理想です。
+    setTimeout(() => { if (window.stopTalking) stopTalking(); }, 7000); 
     </script>
     """, height=0)
 
+    # Streamlitのオーディオウィジェットで再生
     st.audio(audio_bytes, format="audio/wav")
 
 # ===============================
@@ -112,9 +139,10 @@ def play_tts_with_lip(text):
 st.set_page_config(page_title="ユッキー（口パク対応）", layout="wide")
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
+# アバターの表示とJS関数の埋め込み
 show_avatar()
 
-# Gemini初期化
+# Geminiクライアントとチャットセッションの初期化
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
 if "chat" not in st.session_state:
@@ -126,6 +154,7 @@ if "messages" not in st.session_state:
 # ===============================
 # 音声認識ボタン（ブラウザ標準API）
 # ===============================
+# HTML/JSでブラウザのSpeechRecognition APIを使い、結果をStreamlitのチャット入力欄に注入する
 components.html("""
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -133,31 +162,46 @@ let recognition;
 
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
+    recognition.lang = 'ja-JP'; // 日本語を設定
     recognition.continuous = false;
     recognition.interimResults = false;
 
+    // 認識開始ボタンのクリックハンドラ
     function startRec() {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     }
 
+    // 認識結果が出たときのハンドラ
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
+        
+        // Streamlitのチャット入力エリアを探してテキストを注入
         const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
         if (chatInput) {
             chatInput.value = text;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            chatInput.dispatchEvent(new Event('input', { bubbles: true })); // inputイベントを発火
+            
+            // エンターキーイベントを発火させて送信をシミュレート
             const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
             chatInput.dispatchEvent(enterEvent);
         }
     };
 
+    // 認識エラー時のハンドラ
     recognition.onerror = (e) => {
-        document.getElementById("mic-status").innerText = "⚠️ " + e.error;
+        document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
+
+    // 認識が終了した時のハンドラ（続けて認識する場合はここでrecognition.start()を呼ぶ）
+    recognition.onend = () => {
+        if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
+            document.getElementById("mic-status").innerText = "マイク停止中";
+        }
+    }
 } else {
+    // 対応していないブラウザの場合
     document.write("このブラウザは音声認識に対応していません。");
 }
 </script>
@@ -168,20 +212,31 @@ if (SpeechRecognition) {
 # ===============================
 # チャットUI
 # ===============================
+# 過去のメッセージを表示
 for msg in st.session_state.messages:
     avatar = "🧑" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
+# ユーザーからの新しい入力
 if prompt := st.chat_input("質問を入力してください..."):
+    # ユーザーメッセージをセッションに追加し、表示
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
+    # アシスタントの応答
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが考え中..."):
+            # Geminiにメッセージを送信
             response = st.session_state.chat.send_message(prompt)
             text = response.text
+            
+            # テキストを表示
             st.markdown(text)
+            
+            # 音声再生と口パク制御
             play_tts_with_lip(text)
+            
+            # アシスタントのメッセージをセッションに追加
             st.session_state.messages.append({"role": "assistant", "content": text})
