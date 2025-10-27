@@ -47,7 +47,6 @@ def get_avatar_images():
     if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
         return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
     else:
-        # サイドバーに警告を表示
         st.sidebar.warning("⚠️ アバター画像ファイルが見つかりません。")
         placeholder_svg = base64.b64encode(
             f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
@@ -55,9 +54,9 @@ def get_avatar_images():
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
 # ===============================
-# 音声再生＋口パク制御
+# 音声データを生成し、Session Stateに保存する関数
 # ===============================
-def play_tts_with_lip(text):
+def generate_and_store_tts(text):
     if not API_KEY:
         return
     payload = {
@@ -71,24 +70,10 @@ def play_tts_with_lip(text):
         response.raise_for_status()
         result = response.json()
         audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        # 音声データをセッションステートに保存
+        st.session_state.audio_to_play = audio_data_base64
     except Exception as e:
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
-        return
-
-    # st.sidebar にスクリプトを注入
-    st.sidebar.markdown(f"""
-    <script>
-    // サイドバー内で定義された関数を直接呼び出す
-    if (window.startTalking) window.startTalking();
-    const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
-    audio.autoplay = true;
-    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-    audio.play().catch(e => {{
-        console.error("Audio playback failed:", e);
-        if (window.stopTalking) window.stopTalking(); 
-    }});
-    </script>
-    """, unsafe_allow_html=True)
 
 # ===============================
 # Streamlit UI
@@ -99,19 +84,15 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
 
-    # アバターと口パク用のCSSとHTML
     st.markdown(f"""
     <style>
-    /* サイドバー自体の幅と背景色を設定 */
     section[data-testid="stSidebar"] {{
         width: 450px !important;
-        background-color: #FFFFFF !important; /* 背景色を白に設定 */
+        background-color: #FFFFFF !important;
     }}
-    /* メインコンテンツの背景色を白に設定（デフォルトですが念のため） */
     .main {{
         background-color: #FFFFFF !important;
     }}
-    /* サイドバーの中央にアバターを配置 */
     .st-emotion-cache-1y4p8pa {{
         display: flex;
         flex-direction: column;
@@ -155,9 +136,8 @@ with st.sidebar:
     </script>
     """, unsafe_allow_html=True)
 
-
 # --- メインコンテンツ ---
-st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
+st.title("🎀 ユッキー")
 
 # Geminiクライアントとチャットセッションの初期化
 if "client" not in st.session_state:
@@ -170,6 +150,27 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "audio_to_play" not in st.session_state:
+    st.session_state.audio_to_play = None
+
+# --- 音声再生と口パクのトリガー ---
+if st.session_state.audio_to_play:
+    audio_data_base64 = st.session_state.audio_to_play
+    # サイドバーにスクリプトを注入して再生
+    st.sidebar.markdown(f"""
+    <script>
+    if (window.startTalking) window.startTalking();
+    const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
+    audio.autoplay = true;
+    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
+    audio.play().catch(e => {{
+        console.error("Audio playback failed:", e);
+        if (window.stopTalking) window.stopTalking(); 
+    }});
+    </script>
+    """, unsafe_allow_html=True)
+    # 再生後はデータをクリア
+    st.session_state.audio_to_play = None
 
 # 音声認識ボタン
 st.subheader("音声入力")
@@ -214,9 +215,11 @@ if prompt := st.chat_input("質問を入力してください..."):
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-        play_tts_with_lip(text)
+        # 音声データを生成してセッションステートに保存
+        generate_and_store_tts(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
+    # ページを再実行してUIを更新し、音声再生をトリガー
     st.rerun()
 
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
