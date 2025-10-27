@@ -215,7 +215,7 @@ function startRec() {
     recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
 }
 </script>
-""", height=130, key="voice_input")
+""", height=130)
 
 # 音声入力があれば、それをプロンプトとして採用
 if voice_prompt:
