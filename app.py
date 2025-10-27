@@ -24,60 +24,9 @@ except:
     API_KEY = ""
 
 # ===============================
-# アバター表示（口パク付き）
+# アバター画像取得
 # ===============================
-def show_avatar():
-    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-
-    components.html(f"""
-    <style>
-    /* アバターを配置するコンテナのスタイル */
-    .avatar-container {{
-        position: fixed; /* スクロールしても位置を固定 */
-        top: 80px;
-        left: 20px;
-        width: 300px;
-        text-align: center;
-    }}
-    .avatar {{
-        width: 280px;
-        height: 280px;
-        border-radius: 16px;
-        border: 2px solid #f0a;
-        object-fit: cover;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }}
-    </style>
-    <div class="avatar-container">
-      <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-    </div>
-
-    <script>
-    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
-    let talkingInterval = null;
-
-    window.startTalking = function() {{
-        const avatar = document.getElementById('avatar');
-        if ({'true' if has_images else 'false'}) {{ 
-            let toggle = false;
-            if (talkingInterval) clearInterval(talkingInterval);
-            talkingInterval = setInterval(() => {{
-                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
-                toggle = !toggle;
-            }}, 160);
-        }}
-    }}
-    window.stopTalking = function() {{
-        if (talkingInterval) clearInterval(talkingInterval);
-        const avatar = document.getElementById('avatar');
-        if ({'true' if has_images else 'false'}) {{
-            avatar.src = imgCloseBase64;
-        }}
-    }}
-    </script>
-    """, height=340)
-
+@st.cache_data
 def get_avatar_images():
     base_names = ["yukki-close", "yukki-open"]
     extensions = [".jpg", ".jpeg"]
@@ -126,7 +75,8 @@ def play_tts_with_lip(text):
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
         return
 
-    components.html(f"""
+    # components.htmlではなく、st.markdownでJavaScriptを実行
+    st.markdown(f"""
     <script>
     if (window.startTalking) window.startTalking();
     const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
@@ -137,24 +87,46 @@ def play_tts_with_lip(text):
         if (window.stopTalking) window.stopTalking(); 
     }});
     </script>
-    """, height=0, width=0)
+    """, unsafe_allow_html=True)
 
 # ===============================
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- CSSを注入してレイアウトを調整 ---
-st.markdown("""
+# --- アバターとレイアウト用CSSをst.markdownで直接注入 ---
+img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+
+st.markdown(f"""
 <style>
-/* メインのコンテンツブロック全体に左マージンを追加して、アバターのスペースを確保 */
-.main .block-container {
+/* Streamlitのメインコンテンツコンテナのクラス名を特定してスタイルを適用 */
+/* このクラス名はStreamlitのバージョンによって変わる可能性があります */
+div.st-emotion-cache-1y4p8pa {{
     padding-left: 340px; /* アバターの幅 + 余白 */
-    padding-top: 2rem; /* 上部の余白を調整 */
-}
+    padding-top: 2rem;
+    padding-bottom: 6rem; /* 下部入力欄との余白 */
+}}
+
+/* アバターを配置するコンテナのスタイル */
+.avatar-container {{
+    position: fixed; /* スクロールしても位置を固定 */
+    top: 80px;
+    left: 20px;
+    width: 300px;
+    text-align: center;
+    z-index: 100; /* コンテンツより手前、入力欄より後ろ */
+}}
+.avatar {{
+    width: 280px;
+    height: 280px;
+    border-radius: 16px;
+    border: 2px solid #f0a;
+    object-fit: cover;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}}
 
 /* チャット入力ボックスのコンテナを画面下部全体に固定 */
-div[data-testid="stChatInputContainer"] {
+div[data-testid="stChatInputContainer"] {{
     position: fixed;
     bottom: 0;
     left: 0;
@@ -162,21 +134,45 @@ div[data-testid="stChatInputContainer"] {
     width: 100%;
     padding: 1rem 1rem 1.5rem 1rem;
     background-color: white;
-    z-index: 101;
+    z-index: 101; /* 最前面に */
     border-top: 1px solid #e6e6e6;
-}
-
-/* メインコンテンツが下部の入力ボックスに隠れないようにする */
-.main .block-container {
-    padding-bottom: 6rem; 
-}
+}}
 </style>
+
+<!-- アバター本体のHTML -->
+<div class="avatar-container">
+  <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+</div>
+
+<!-- 口パク制御のJavaScript -->
+<script>
+const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
+const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
+let talkingInterval = null;
+
+window.startTalking = function() {{
+    const avatar = document.getElementById('avatar');
+    if ({'true' if has_images else 'false'}) {{ 
+        let toggle = false;
+        if (talkingInterval) clearInterval(talkingInterval);
+        talkingInterval = setInterval(() => {{
+            avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
+            toggle = !toggle;
+        }}, 160);
+    }}
+}}
+window.stopTalking = function() {{
+    if (talkingInterval) clearInterval(talkingInterval);
+    const avatar = document.getElementById('avatar');
+    if ({'true' if has_images else 'false'}) {{
+        avatar.src = imgCloseBase64;
+    }}
+}}
+</script>
 """, unsafe_allow_html=True)
 
-# --- アバターを左側に固定表示 ---
-show_avatar()
 
-# --- メインコンテンツ (右側に表示される) ---
+# --- メインコンテンツ (CSSによって右側に配置される) ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
 # Geminiクライアントとチャットセッションの初期化
@@ -216,7 +212,6 @@ if (SpeechRecognition) {
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        // Streamlitのチャット入力にテキストを送信
         window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
     };
     recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
@@ -240,23 +235,17 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
-# --- チャット入力と処理 (カラムの外に配置) ---
+# --- チャット入力と処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
-    # ユーザーメッセージをセッションに追加
     st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # AIからの応答を取得
     if st.session_state.chat:
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt)
             text = response.text
             st.session_state.messages.append({"role": "assistant", "content": text})
-            # 音声再生は応答が確定してから
             play_tts_with_lip(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
-    # ページを再実行して、新しいメッセージを即座に表示
     st.rerun()
 
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
@@ -267,9 +256,7 @@ window.addEventListener('message', event => {
         const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
         if (chatInput) {
             chatInput.value = event.data.text;
-            // イベントを発火させてStreamlitに値の変更を認識させる
             chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            // Enterキーを押して送信
             const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
             chatInput.dispatchEvent(enterEvent);
         }
