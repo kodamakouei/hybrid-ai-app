@@ -55,6 +55,28 @@ def get_avatar_images():
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
 # ===============================
+# 音声データを生成し、Session Stateに保存する関数
+# ===============================
+def generate_and_store_tts(text):
+    if not API_KEY:
+        return
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {"responseModalities": ["AUDIO"]},
+        "model": TTS_MODEL
+    }
+    headers = {'Content-Type': 'application/json'}
+    try:
+        response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        result = response.json()
+        audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        # 音声データをセッションステートに保存
+        st.session_state.audio_to_play = audio_data_base64
+    except Exception as e:
+        st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
+
+# ===============================
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
@@ -70,9 +92,8 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "run_id" not in st.session_state:
-    st.session_state.run_id = str(uuid.uuid4())
-
+if "audio_to_play" not in st.session_state:
+    st.session_state.audio_to_play = None
 
 # --- サイドバーにアバターと口パク用JSを配置 ---
 with st.sidebar:
@@ -109,7 +130,6 @@ with st.sidebar:
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
 
-    // グローバルスコープに関数を公開
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
         if (!avatar || !{'true' if has_images else 'false'}) return;
@@ -130,12 +150,43 @@ with st.sidebar:
     </script>
     """, unsafe_allow_html=True)
 
+# --- 音声再生と口パクのトリガー ---
+if st.session_state.audio_to_play:
+    audio_data_base64 = st.session_state.audio_to_play
+    # サイドバーにスクリプトを注入して再生
+    st.sidebar.markdown(f"""
+    <script>
+    if (window.startTalking) window.startTalking();
+    const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
+    audio.autoplay = true;
+    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
+    audio.play().catch(e => {{
+        console.error("Audio playback failed:", e);
+        if (window.stopTalking) window.stopTalking(); 
+    }});
+    </script>
+    """, unsafe_allow_html=True)
+    # 再生後はデータをクリア
+    st.session_state.audio_to_play = None
+
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー")
 
-# 音声認識ボタン
+# チャットUIのコンテナ
+st.subheader("ユッキーとの会話履歴")
+chat_container = st.container()
+with chat_container:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+            st.markdown(msg["content"])
+
+# --- 入力処理 ---
+# テキスト入力
+prompt = st.chat_input("質問を入力してください...")
+
+# 音声認識ボタンと値の取得
 st.subheader("音声入力")
-components.html("""
+voice_prompt = components.html("""
 <div id="mic-container">
     <button onclick="startRec()">🎙 話す</button>
     <p id="mic-status">マイク停止中</p>
@@ -157,91 +208,30 @@ function startRec() {
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        // Streamlitにテキストを送信
+        // Streamlitにテキストを送信し、Pythonスクリプトを再実行させる
         window.parent.Streamlit.setComponentValue(text);
     };
     recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
     recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
 }
 </script>
-""", height=130)
+""", height=130, key="voice_input")
 
-# チャットUIのコンテナ
-st.subheader("ユッキーとの会話履歴")
-chat_container = st.container()
-
-# 過去のメッセージを表示
-with chat_container:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-            st.markdown(msg["content"])
-
-# --- 入力処理 ---
-# 音声入力とテキスト入力を統合
-prompt = st.chat_input("質問を入力してください...")
-voice_prompt = components.get_component_value()
-
+# 音声入力があれば、それをプロンプトとして採用
 if voice_prompt:
     prompt = voice_prompt
 
 if prompt:
-    # ユーザーメッセージをUIに即時反映
-    with chat_container:
-        with st.chat_message("user", avatar="🧑"):
-            st.markdown(prompt)
-    
     st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # AI応答と音声再生
+    
     if st.session_state.chat:
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-
-        # 音声データを取得
-        payload = {
-            "contents": [{"parts": [{"text": text}]}],
-            "generationConfig": {"responseModalities": ["AUDIO"]},
-            "model": TTS_MODEL
-        }
-        headers = {'Content-Type': 'application/json'}
-        try:
-            tts_response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
-            tts_response.raise_for_status()
-            result = tts_response.json()
-            audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-
-            # JavaScriptでAIの応答と音声再生を処理
-            components.html(f"""
-            <script>
-            (function() {{
-                // 1. サイドバーの口パク開始
-                const sidebarWindow = window.parent.document.querySelector('iframe[title="stSidebar"]').contentWindow;
-                sidebarWindow.startTalking();
-
-                // 2. 音声再生
-                const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
-                audio.autoplay = true;
-                audio.onended = () => {{
-                    sidebarWindow.stopTalking();
-                }};
-                audio.play().catch(e => {{
-                    console.error("Audio playback failed:", e);
-                    sidebarWindow.stopTalking();
-                }});
-
-                // 3. AIのチャットメッセージをUIに追加
-                // この部分はStreamlitの再実行に任せるため、ここでは何もしない
-            }})();
-            </script>
-            """, height=0)
-            
-            # 応答が完了したら一度だけ再実行してUIを確定させる
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"❌ 音声データ取得または再生に失敗しました。詳細: {e}")
-            st.rerun()
+        # 音声データを生成してセッションステートに保存
+        generate_and_store_tts(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-        st.rerun()
+    
+    # ページを再実行してUIを更新し、音声再生をトリガー
+    st.rerun()
