@@ -19,39 +19,58 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 # NOTE: APIキーはStreamlitのst.secretsから取得することを想定しています。
-API_KEY = st.secrets["GEMINI_API_KEY"] 
+# 実際のコードではst.secrets["GEMINI_API_KEY"]を使用
+try:
+    API_KEY = st.secrets["GEMINI_API_KEY"] 
+except:
+    API_KEY = ""
+
 
 # ===============================
 # アバター表示（口パク付き）
 # ===============================
 def show_avatar():
-    # ★実行環境に yukki-close.jpg と yukki-open.jpg が必要です
+    # ★実行環境に yukki-close.jpg/jpeg と yukki-open.jpg/jpeg が必要です
     
     img_close_base64 = None
     img_open_base64 = None
+    has_images = False
+    data_uri_prefix = "" # Base64データURIのプレフィックス
+
+    # 試行するファイル名のリスト
+    base_names = ["yukki-close", "yukki-open"]
+    extensions = [".jpg", ".jpeg"]
     
-    # 画像ファイルの存在確認とBase64変換
-    try:
-        with open("yukki-close.jpg", "rb") as f:
-            img_close_base64 = base64.b64encode(f.read()).decode("utf-8")
-        with open("yukki-open.jpg", "rb") as f:
-            img_open_base64 = base64.b64encode(f.read()).decode("utf-8")
+    # 画像の読み込みを試行
+    loaded_images = {}
+    
+    for base in base_names:
+        for ext in extensions:
+            file_name = base + ext
+            try:
+                with open(file_name, "rb") as f:
+                    # 成功した場合、Base64エンコード
+                    loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
+                    data_uri_prefix = f"data:image/{'jpeg' if ext == '.jpg' or ext == '.jpeg' else 'png'};base64," # 読み込んだ拡張子に基づきMIMEタイプを設定
+                    break # 成功したら次のベース名へ
+            except FileNotFoundError:
+                continue
+
+    if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
+        img_close_base64 = loaded_images["yukki-close"]
+        img_open_base64 = loaded_images["yukki-open"]
         has_images = True
-    except FileNotFoundError:
-        has_images = False
-        # 画像がない場合はダミー画像を使用
-        # プレースホルダーのBase64データURI
-        img_close_base64 = "data:image/svg+xml;base64," + base64.b64encode(
-            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="#a00" font-family="sans-serif">❌画像が見つかりません</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-size="16" fill="#a00" font-family="sans-serif">yukki-close.jpg / yukki-open.jpg</text></svg>""".encode('utf-8')
+    else:
+        # 画像がない場合のダミー画像を使用
+        # プレースホルダーのBase64データURI (SVG)
+        img_close_base64 = base64.b64encode(
+            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="#a00" font-family="sans-serif">❌画像ファイルが見つかりません</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-size="16" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
         ).decode("utf-8")
-        # 開口画像は閉口画像と同じで固定
+        data_uri_prefix = "data:image/svg+xml;base64,"
         img_open_base64 = img_close_base64
-        # st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示します。", icon="🖼️")
-        # st.toast()はUIに残りすぎるため、代わりにコメントアウトしました。
+        st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示しています。ファイル名と拡張子を確認してください (yukki-close.jpg/jpeg, yukki-open.jpg/jpeg)。")
 
-
-    # StreamlitにHTML/JSを埋め込み（口パク制御）
-    # .avatar-container の CSS を強化します
+    # Base64データをJavaScript内で利用できるようにするため、Pythonのf-stringで直接埋め込む
     components.html(f"""
     <style>
     /* アバターを配置するコンテナのスタイル */
@@ -78,10 +97,15 @@ def show_avatar():
     }}
     </style>
     <div class="avatar-container">
-      <img id="avatar" src="{img_close_base64}" class="avatar">
+      <!-- Base64データURIをそのままimgタグのsrc属性に設定 -->
+      <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     </div>
 
     <script>
+    // Base64データURI全体をJavaScript変数として定義
+    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
+
     // 口パク開始関数
     let talkingInterval = null;
     function startTalking() {{
@@ -91,9 +115,7 @@ def show_avatar():
             let toggle = false;
             if (talkingInterval) clearInterval(talkingInterval);
             talkingInterval = setInterval(() => {{
-                avatar.src = toggle
-                ? "data:image/jpeg;base64,{img_open_base64}" // 口が開いた画像
-                : "data:image/jpeg;base64,{img_close_base64}"; // 口が閉じた画像
+                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
             }}, 160);
         }}
@@ -104,7 +126,7 @@ def show_avatar():
         const avatar = document.getElementById('avatar');
         // 画像がある場合のみ閉口画像に戻す
         if ({'true' if has_images else 'false'}) {{
-            avatar.src = "data:image/jpeg;base64,{img_close_base64}";
+            avatar.src = imgCloseBase64;
         }}
     }}
     </script>
@@ -193,11 +215,6 @@ st.markdown("""
     /* Streamlitの内部コンテナ（.main > div）にマージンを設定してコンテンツ全体を右に移動 */
     padding-left: 350px !important; /* アバターの幅(300px)より少し大きく */
 }}
-/* チャット入力フィールドの親コンテナにも同様にオフセットを適用 */
-.stChatInput > div {{
-    margin-left: 330px; 
-    width: calc(100% - 330px);
-}}
 /* ユーザーのチャット入力欄自体を右側エリアに合わせる */
 div[data-testid="stChatInputContainer"] {{
     position: fixed; /* 常に画面下に固定 */
@@ -208,6 +225,17 @@ div[data-testid="stChatInputContainer"] {{
     background: white;
     padding: 10px 20px 10px 10px;
     box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+}}
+/* チャット入力フィールドの親コンテナのデフォルトのマージンをリセットし、固定フッターと重ならないように調整 */
+.stChatInput {{
+    /* この要素は固定要素ではないが、その親要素が固定されているので、ここでは微調整のみ */
+    margin-left: 0 !important; 
+    padding: 0 !important;
+}}
+
+/* チャット履歴がフッターと重なるのを防ぐためのボトムパディングを追加 */
+div[data-testid="stVerticalBlock"] {{
+    padding-bottom: 90px; /* チャット入力フッターの高さ分 + 余裕 */
 }}
 </style>
 """, unsafe_allow_html=True)
