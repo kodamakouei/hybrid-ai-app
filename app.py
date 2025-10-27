@@ -76,7 +76,7 @@ def show_avatar():
     """, height=340)
 
 # ===============================
-# 音声再生＋口パク制御
+# 音声再生＋口パク制御 (修正済み)
 # ===============================
 def play_tts_with_lip(text):
     # Gemini TTS APIへのペイロード構築
@@ -103,35 +103,54 @@ def play_tts_with_lip(text):
             if attempt < MAX_RETRIES - 1:
                 import time
                 wait_time = 2 ** attempt
-                # print(f"API呼び出し失敗。{wait_time}秒後にリトライします。", file=sys.stderr)
                 time.sleep(wait_time)
             else:
                 st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
                 return
 
     try:
-        # resultからbase64エンコードされたオーディオデータを抽出
-        audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        # resultからbase64エンコードされたオーディオデータを抽出 (デコードせずそのまま使用)
+        audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except Exception:
         st.error("❌ 音声データ取得失敗: APIレスポンス構造が予期されたものではありません。")
-        # st.json(result) # デバッグ用
         return
 
-    audio_bytes = base64.b64decode(audio_data)
-
-    # 🎬 JavaScriptで口パクアニメーション制御
-    # 音声の再生と同時に口パクを開始し、7秒後に停止する（再生時間はテキスト長に応じて調整が必要です）
-    components.html("""
+    # 🎬 JavaScriptで口パクアニメーション制御と自動再生
+    # st.audioを使わず、HTML/JSで <audio autoplay> を生成し、onendedで口パクを停止させる
+    html_audio_player = f"""
     <script>
     // window.startTalkingとwindow.stopTalkingはshow_avatar()で定義されています
     if (window.startTalking) startTalking();
-    // ここでは単純に7秒で停止させていますが、実際の音声再生終了イベントに連動させるのが理想です。
-    setTimeout(() => { if (window.stopTalking) stopTalking(); }, 7000); 
-    </script>
-    """, height=0)
+    
+    // Audioオブジェクトを生成し、Base64データURIを設定
+    const audio = new Audio();
+    // TTS APIはPCM16を返すため、ここでは 'audio/wav' としてBase64データを扱います
+    audio.src = 'data:audio/wav;base64,{audio_data_base64}'; 
+    audio.autoplay = true;
 
-    # Streamlitのオーディオウィジェットで再生
-    st.audio(audio_bytes, format="audio/wav")
+    // 音声再生が終了したら口パクを停止
+    audio.onended = function() {{
+        if (window.stopTalking) stopTalking();
+    }};
+    
+    // 自動再生を試みる (ブラウザのポリシーでブロックされる可能性がある)
+    audio.play().catch(e => {{
+        console.error("Audio playback failed (usually due to autoplay policy):", e);
+        // 再生に失敗した場合でも、口パクを停止させる
+        if (window.stopTalking) stopTalking(); 
+    }});
+
+    // Streamlitのコンポーネントとしてオーディオを再生させるため、
+    // UIからは見えない位置にオーディオ要素を一時的に挿入 (ただし、自動再生の回避策として機能しない場合もあります)
+    const container = document.createElement('div');
+    container.style.display = 'none';
+    container.appendChild(audio);
+    document.body.appendChild(container);
+    </script>
+    """
+    # components.htmlでオーディオ再生と口パク制御を同時に行う
+    # height=0, width=0に設定することで、このコンポーネント自体を非表示にします
+    components.html(html_audio_player, height=0, width=0)
 
 # ===============================
 # Streamlit UI
