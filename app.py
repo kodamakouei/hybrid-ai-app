@@ -3,7 +3,6 @@ from google import genai
 import base64, json, requests
 import streamlit.components.v1 as components
 import os
-import uuid
 
 # ===============================
 # 設定
@@ -48,6 +47,7 @@ def get_avatar_images():
     if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
         return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
     else:
+        # サイドバーに警告を表示
         st.sidebar.warning("⚠️ アバター画像ファイルが見つかりません。")
         placeholder_svg = base64.b64encode(
             f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
@@ -55,9 +55,9 @@ def get_avatar_images():
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
 # ===============================
-# 音声データを生成し、Session Stateに保存する関数
+# 音声再生＋口パク制御
 # ===============================
-def generate_and_store_tts(text):
+def play_tts_with_lip(text):
     if not API_KEY:
         return
     payload = {
@@ -71,43 +71,47 @@ def generate_and_store_tts(text):
         response.raise_for_status()
         result = response.json()
         audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-        # 音声データをセッションステートに保存
-        st.session_state.audio_to_play = audio_data_base64
     except Exception as e:
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
+        return
+
+    # st.sidebar にスクリプトを注入
+    st.sidebar.markdown(f"""
+    <script>
+    // サイドバー内で定義された関数を直接呼び出す
+    if (window.startTalking) window.startTalking();
+    const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
+    audio.autoplay = true;
+    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
+    audio.play().catch(e => {{
+        console.error("Audio playback failed:", e);
+        if (window.stopTalking) window.stopTalking(); 
+    }});
+    </script>
+    """, unsafe_allow_html=True)
 
 # ===============================
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- セッションステートの初期化 ---
-if "client" not in st.session_state:
-    st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
-if "chat" not in st.session_state:
-    if st.session_state.client:
-        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-    else:
-        st.session_state.chat = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "audio_to_play" not in st.session_state:
-    st.session_state.audio_to_play = None
-
-# --- サイドバーにアバターと口パク用JSを配置 ---
+# --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
 
+    # アバターと口パク用のCSSとHTML
     st.markdown(f"""
     <style>
+    /* サイドバー自体の幅と背景色を設定 */
     section[data-testid="stSidebar"] {{
         width: 450px !important;
-        background-color: #FFFFFF !important;
+        background-color: #FFFFFF !important; /* 背景色を白に設定 */
     }}
+    /* メインコンテンツの背景色を白に設定（デフォルトですが念のため） */
     .main {{
         background-color: #FFFFFF !important;
     }}
+    /* サイドバーの中央にアバターを配置 */
     .st-emotion-cache-1y4p8pa {{
         display: flex;
         flex-direction: column;
@@ -132,106 +136,102 @@ with st.sidebar:
 
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
-        if (!avatar || !{'true' if has_images else 'false'}) return;
-        let toggle = false;
-        if (talkingInterval) clearInterval(talkingInterval);
-        talkingInterval = setInterval(() => {{
-            avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
-            toggle = !toggle;
-        }}, 160);
+        if ({'true' if has_images else 'false'}) {{ 
+            let toggle = false;
+            if (talkingInterval) clearInterval(talkingInterval);
+            talkingInterval = setInterval(() => {{
+                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
+                toggle = !toggle;
+            }}, 160);
+        }}
     }}
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
-        if (avatar && {'true' if has_images else 'false'}) {{
+        if ({'true' if has_images else 'false'}) {{
             avatar.src = imgCloseBase64;
         }}
     }}
     </script>
     """, unsafe_allow_html=True)
 
-# --- 音声再生と口パクのトリガー ---
-if st.session_state.audio_to_play:
-    audio_data_base64 = st.session_state.audio_to_play
-    # サイドバーにスクリプトを注入して再生
-    st.sidebar.markdown(f"""
-    <script>
-    if (window.startTalking) window.startTalking();
-    const audio = new Audio('data:audio/wav;base64,{audio_data_base64}');
-    audio.autoplay = true;
-    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-    audio.play().catch(e => {{
-        console.error("Audio playback failed:", e);
-        if (window.stopTalking) window.stopTalking(); 
-    }});
-    </script>
-    """, unsafe_allow_html=True)
-    # 再生後はデータをクリア
-    st.session_state.audio_to_play = None
 
 # --- メインコンテンツ ---
-st.title("🎀 ユッキー")
+st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
-# チャットUIのコンテナ
-st.subheader("ユッキーとの会話履歴")
-chat_container = st.container()
-with chat_container:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-            st.markdown(msg["content"])
+# Geminiクライアントとチャットセッションの初期化
+if "client" not in st.session_state:
+    st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
+if "chat" not in st.session_state:
+    if st.session_state.client:
+        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
+    else:
+        st.session_state.chat = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# --- 入力処理 ---
-# テキスト入力
-prompt = st.chat_input("質問を入力してください...")
-
-# 音声認識ボタンと値の取得
+# 音声認識ボタン
 st.subheader("音声入力")
-voice_prompt = components.html("""
+components.html("""
 <div id="mic-container">
-    <button onclick="startRec()">🎙 話す</button>
+    <button onclick="window.parent.startRec()">🎙 話す</button>
     <p id="mic-status">マイク停止中</p>
 </div>
 <script>
-function startRec() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
-        return;
-    }
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
     const recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
-    
-    document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-    recognition.start();
-
+    window.parent.startRec = () => {
+        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
+        recognition.start();
+    };
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        // Streamlitにテキストを送信し、Pythonスクリプトを再実行させる
-        window.parent.Streamlit.setComponentValue(text);
+        window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
     };
     recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
     recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
+} else {
+    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
 }
 </script>
 """, height=130)
 
-# 音声入力があれば、それをプロンプトとして採用
-if voice_prompt:
-    prompt = voice_prompt
+# チャットUI
+st.subheader("ユッキーとの会話履歴")
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+        st.markdown(msg["content"])
 
-if prompt:
+# --- チャット入力と処理 ---
+if prompt := st.chat_input("質問を入力してください..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
     if st.session_state.chat:
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-        # 音声データを生成してセッションステートに保存
-        generate_and_store_tts(text)
+        play_tts_with_lip(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
-    # ページを再実行してUIを更新し、音声再生をトリガー
     st.rerun()
+
+# --- 音声認識からチャット入力へテキストを転送するJavaScript ---
+components.html("""
+<script>
+window.addEventListener('message', event => {
+    if (event.data.type === 'SET_CHAT_INPUT') {
+        const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+        if (chatInput) {
+            chatInput.value = event.data.text;
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
+            chatInput.dispatchEvent(enterEvent);
+        }
+    }
+});
+</script>
+""", height=0)
