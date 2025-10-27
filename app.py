@@ -147,6 +147,12 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 # --- CSSを注入してレイアウトを調整 ---
 st.markdown("""
 <style>
+/* メインのコンテンツブロック全体に左マージンを追加して、アバターのスペースを確保 */
+.main .block-container {
+    padding-left: 340px; /* アバターの幅 + 余白 */
+    padding-top: 2rem; /* 上部の余白を調整 */
+}
+
 /* チャット入力ボックスのコンテナを画面下部全体に固定 */
 div[data-testid="stChatInputContainer"] {
     position: fixed;
@@ -156,87 +162,83 @@ div[data-testid="stChatInputContainer"] {
     width: 100%;
     padding: 1rem 1rem 1.5rem 1rem;
     background-color: white;
-    z-index: 101; /* アバターより手前に */
+    z-index: 101;
     border-top: 1px solid #e6e6e6;
 }
-/* メインコンテンツ（カラムを含む）が入力ボックスに隠れないように、下部に余白を追加 */
+
+/* メインコンテンツが下部の入力ボックスに隠れないようにする */
 .main .block-container {
-    padding-bottom: 6rem; /* 入力ボックスの高さに応じて調整 */
+    padding-bottom: 6rem; 
 }
 </style>
 """, unsafe_allow_html=True)
 
-# --- レイアウトを2カラムに分割 ---
-left_col, right_col = st.columns([1, 3])
+# --- アバターを左側に固定表示 ---
+show_avatar()
 
-with left_col:
-    # 左カラムにアバターを表示
-    show_avatar()
+# --- メインコンテンツ (右側に表示される) ---
+st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
-with right_col:
-    # --- 右カラムのコンテンツ ---
-    st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
+# Geminiクライアントとチャットセッションの初期化
+if "client" not in st.session_state:
+    if API_KEY:
+        st.session_state.client = genai.Client(api_key=API_KEY)
+    else:
+        st.session_state.client = None
 
-    # Geminiクライアントとチャットセッションの初期化
-    if "client" not in st.session_state:
-        if API_KEY:
-            st.session_state.client = genai.Client(api_key=API_KEY)
-        else:
-            st.session_state.client = None
-    
-    if "chat" not in st.session_state:
-        if st.session_state.client:
-            config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-            st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-        else:
-            st.session_state.chat = None
+if "chat" not in st.session_state:
+    if st.session_state.client:
+        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
+    else:
+        st.session_state.chat = None
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    # 音声認識ボタン
-    st.subheader("音声入力")
-    components.html("""
-    <script>
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
+# 音声認識ボタン
+st.subheader("音声入力")
+components.html("""
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition;
 
-    if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = false;
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
 
-        window.startRec = function() {
-            document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-            recognition.start();
-        }
-
-        recognition.onresult = (event) => {
-            const text = event.results[0][0].transcript;
-            document.getElementById("mic-status").innerText = "✅ " + text;
-            // Streamlitのチャット入力にテキストを送信
-            window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
-        };
-        recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
-        recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
-    } else {
-        document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+    window.startRec = function() {
+        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
+        recognition.start();
     }
-    </script>
-    <div id="mic-container">
-        <button onclick="startRec()">🎙 話す</button>
-        <p id="mic-status">マイク停止中</p>
-    </div>
-    """, height=130)
 
-    # チャットUI
-    st.subheader("ユッキーとの会話履歴")
+    recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        document.getElementById("mic-status").innerText = "✅ " + text;
+        // Streamlitのチャット入力にテキストを送信
+        window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
+    };
+    recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
+    recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
+} else {
+    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+}
+</script>
+<div id="mic-container">
+    <button onclick="startRec()">🎙 話す</button>
+    <p id="mic-status">マイク停止中</p>
+</div>
+""", height=130)
 
-    # 過去のメッセージを表示
-    for msg in st.session_state.messages:
-        avatar = "🧑" if msg["role"] == "user" else "🤖"
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(msg["content"])
+# チャットUI
+st.subheader("ユッキーとの会話履歴")
+
+# 過去のメッセージを表示
+for msg in st.session_state.messages:
+    avatar = "🧑" if msg["role"] == "user" else "🤖"
+    with st.chat_message(msg["role"], avatar=avatar):
+        st.markdown(msg["content"])
 
 # --- チャット入力と処理 (カラムの外に配置) ---
 if prompt := st.chat_input("質問を入力してください..."):
