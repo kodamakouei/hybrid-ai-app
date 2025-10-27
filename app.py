@@ -83,7 +83,6 @@ st.set_page_config(page_title="ユッキー", layout="wide")
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
-# チャットセッションは後から作成するので、ここではNoneで初期化
 if "chat" not in st.session_state:
     st.session_state.chat = None
 if "messages" not in st.session_state:
@@ -91,6 +90,10 @@ if "messages" not in st.session_state:
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
 if "processing" not in st.session_state:
+    st.session_state.processing = False
+
+# --- 処理中フラグを、毎回の実行開始時にリセットする ---
+if st.session_state.processing:
     st.session_state.processing = False
 
 # --- サイドバー ---
@@ -200,9 +203,9 @@ if prompt and not st.session_state.processing:
             error_message = f"API呼び出し中にエラーが発生しました: {e}"
             st.error(error_message)
             st.session_state.messages.append({"role": "assistant", "content": error_message})
+            # エラーが発生した場合でも、フラグは次の再実行でリセットされる
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
-    # 処理完了後、フラグをリセットして再実行
-    st.session_state.processing = False
+    # ページを再実行。この時点では processing フラグは True のまま。
     st.rerun()
