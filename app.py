@@ -123,7 +123,6 @@ with st.sidebar:
         height: 400px;
         border-radius: 16px;
         object-fit: cover;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }}
     </style>
 
