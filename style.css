@@ -1,0 +1,44 @@
+/* Streamlitのデフォルトのパディングを削除 */
+.main .block-container {
+    padding: 0 !important;
+}
+
+/* 左側の固定アバター領域 */
+.avatar-container {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 340px; /* 左側のスペースを確保 */
+    height: 100vh; /* 画面の高さ全体 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+.avatar {
+    width: 280px;
+    height: 280px;
+    border-radius: 16px;
+    border: 2px solid #f0a;
+    object-fit: cover;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* 右側のスクロール可能なコンテンツ領域 */
+.content-container {
+    margin-left: 340px; /* アバター領域の幅だけ左にマージンを作成 */
+    padding: 2rem 2rem 6rem 2rem; /* 上下左右の余白と、下部入力欄のスペース確保 */
+}
+
+/* チャット入力ボックスのコンテナを画面下部全体に固定 */
+div[data-testid="stChatInputContainer"] {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding: 1rem 1rem 1.5rem 1rem;
+    background-color: white;
+    z-index: 101; /* 最前面に */
+    border-top: 1px solid #e6e6e6;
+}

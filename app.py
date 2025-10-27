@@ -89,58 +89,28 @@ def play_tts_with_lip(text):
     """, unsafe_allow_html=True)
 
 # ===============================
+# CSSファイルを読み込む関数
+# ===============================
+def load_css(file_name):
+    try:
+        with open(file_name) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error(f"CSSファイルが見つかりません: {file_name}")
+
+# ===============================
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- アバターとレイアウト用CSSをst.markdownで直接注入 ---
+# CSSファイルを読み込む
+load_css("style.css")
+
+# --- アバターとレイアウト用HTMLを注入 ---
 img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
 
 st.markdown(f"""
-<style>
-/* Streamlitのメインコンテンツ領域をターゲットにする、より安定したセレクタ */
-section.main > div:has(> [data-testid="stVerticalBlock"]) {{
-    padding-left: 340px !important; /* アバターの幅 + 余白 (強制適用) */
-}}
-
-/* アバターを配置するコンテナのスタイル */
-.avatar-container {{
-    position: fixed; /* スクロールしてもビューポートに対して位置を固定 */
-    top: 80px;
-    left: 20px;
-    width: 300px;
-    text-align: center;
-    z-index: 100; /* コンテンツより手前、入力欄より後ろ */
-}}
-.avatar {{
-    width: 280px;
-    height: 280px;
-    border-radius: 16px;
-    border: 2px solid #f0a;
-    object-fit: cover;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}}
-
-/* チャット入力ボックスのコンテナを画面下部全体に固定 */
-div[data-testid="stChatInputContainer"] {{
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    padding: 1rem 1rem 1.5rem 1rem;
-    background-color: white;
-    z-index: 101; /* 最前面に */
-    border-top: 1px solid #e6e6e6;
-}}
-
-/* メインコンテンツが下部の入力ボックスに隠れないようにする */
-.main .block-container {{
-    padding-bottom: 6rem !important; 
-}}
-</style>
-
-<!-- アバター本体のHTML -->
+<!-- 左側のアバターHTML -->
 <div class="avatar-container">
   <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
 </div>
@@ -172,8 +142,9 @@ window.stopTalking = function() {{
 </script>
 """, unsafe_allow_html=True)
 
+# --- 右側のコンテンツを包むコンテナを開始 ---
+st.markdown('<div class="content-container">', unsafe_allow_html=True)
 
-# --- メインコンテンツ (CSSによって右側に配置される) ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
 # Geminiクライアントとチャットセッションの初期化
@@ -235,6 +206,10 @@ for msg in st.session_state.messages:
     avatar = "🧑" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
+
+# --- 右側のコンテンツを包むコンテナを閉じる ---
+st.markdown('</div>', unsafe_allow_html=True)
+
 
 # --- チャット入力と処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
