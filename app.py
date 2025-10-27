@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 import base64, json, requests
 import streamlit.components.v1 as components
+import os
 
 # ===============================
 # 設定
@@ -20,23 +21,21 @@ TTS_VOICE = "Kore"
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ===============================
-# 画像アップロード＋口パク設定
+# アバター表示（口パク付き）
 # ===============================
 def show_avatar():
-    st.subheader("🎨 アバター設定")
-    col1, col2 = st.columns(2)
-    with col1:
-        close_file = st.file_uploader("口を閉じた画像をアップロード", type=["jpg", "png"], key="close")
-    with col2:
-        open_file = st.file_uploader("口を開いた画像をアップロード", type=["jpg", "png"], key="open")
-
-    if not close_file or not open_file:
-        st.warning("⛔ 2枚の画像をアップロードしてください。")
+    # ✅ ファイル存在チェック
+    if not (os.path.exists("yukki-close.jpg") and os.path.exists("yukki-open.jpg")):
+        st.error("❌ yukki-close.jpg と yukki-open.jpg が同じフォルダにありません。")
         st.stop()
 
-    img_close = base64.b64encode(close_file.read()).decode("utf-8")
-    img_open = base64.b64encode(open_file.read()).decode("utf-8")
+    # ✅ base64に変換
+    with open("yukki-close.jpg", "rb") as f:
+        img_close = base64.b64encode(f.read()).decode("utf-8")
+    with open("yukki-open.jpg", "rb") as f:
+        img_open = base64.b64encode(f.read()).decode("utf-8")
 
+    # ✅ StreamlitにHTML/JSを埋め込み（口パク制御）
     components.html(f"""
     <style>
     .avatar {{
@@ -48,7 +47,7 @@ def show_avatar():
     }}
     </style>
     <div style="text-align:center;">
-      <img id="avatar" src="data:image/png;base64,{img_close}" class="avatar">
+      <img id="avatar" src="data:image/jpeg;base64,{img_close}" class="avatar">
     </div>
 
     <script>
@@ -59,15 +58,15 @@ def show_avatar():
         if (talkingInterval) clearInterval(talkingInterval);
         talkingInterval = setInterval(() => {{
             avatar.src = toggle
-              ? "data:image/png;base64,{img_open}"
-              : "data:image/png;base64,{img_close}";
+              ? "data:image/jpeg;base64,{img_open}"
+              : "data:image/jpeg;base64,{img_close}";
             toggle = !toggle;
-        }}, 160);
+        }}, 160); // ← パクパク速度（ミリ秒）
     }}
     function stopTalking() {{
         clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
-        avatar.src = "data:image/png;base64,{img_close}";
+        avatar.src = "data:image/jpeg;base64,{img_close}";
     }}
     </script>
     """, height=340)
@@ -111,7 +110,7 @@ def play_tts_with_lip(text):
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー（口パク対応）", layout="wide")
-st.title("🎀 ユッキー（Vtuber風 AIアシスタント）")
+st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
 show_avatar()
 
