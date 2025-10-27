@@ -144,11 +144,9 @@ st.title("🎀 ユッキー")
 
 # チャット履歴
 st.subheader("ユッキーとの会話履歴")
-chat_container = st.container()
-with chat_container:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-            st.markdown(msg["content"])
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+        st.markdown(msg["content"])
 
 # --- 入力処理 ---
 prompt = st.chat_input("質問を入力してください...")
@@ -185,8 +183,13 @@ if voice_prompt:
 # --- プロンプト処理とAPI呼び出し ---
 if prompt and not st.session_state.processing:
     st.session_state.processing = True
+
+    # ユーザーのメッセージを履歴に追加して表示
     st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(prompt)
     
+    # AIの応答を処理
     if st.session_state.chat:
         try:
             response = st.session_state.chat.send_message(prompt)
@@ -194,8 +197,9 @@ if prompt and not st.session_state.processing:
             st.session_state.messages.append({"role": "assistant", "content": text})
             generate_and_store_tts(text)
         except Exception as e:
-            st.error(f"API呼び出し中にエラーが発生しました: {e}")
-            st.session_state.messages.append({"role": "assistant", "content": f"エラーが発生しました: {e}"})
+            error_message = f"API呼び出し中にエラーが発生しました: {e}"
+            st.error(error_message)
+            st.session_state.messages.append({"role": "assistant", "content": error_message})
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
