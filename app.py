@@ -80,13 +80,14 @@ def show_avatar():
         top: 60px !important; /* Streamlitヘッダーを考慮して調整 */
         left: 20px !important; /* 左端から20px */
         width: 300px;
-        z-index: 100; /* 他の要素より手前に表示 */
+        z-index: 1000; /* Z-indexを最大値に近く上げて最前面に */
         text-align: center;
         /* 背景色を追加して、スクロール時にチャットと重なるのを防ぐ */
         background: white; 
         padding: 10px;
         border-radius: 16px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        margin: 0; /* マージンをリセットして固定を確実にする */
     }}
     .avatar {{
         width: 280px;
