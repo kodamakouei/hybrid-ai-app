@@ -1,0 +1,34 @@
+# .streamlit/config.toml
+ 
+[theme]
+
+# デフォルトテーマの利用
+ 
+[browser]
+
+# Streamlitのフッターを非表示にする設定
+
+showSidebarNavigation = false
+ 
+[global]
+
+# Streamlitのデプロイメントバナーを非表示にする設定
+
+showDeploymentButton = false
+ 
+[runner]
+
+# Streamlitのフッター（Made with Streamlit）を非表示にする設定
+
+magicEnabled = true
+ 
+[ui]
+
+# この設定がフッター（アカウントに飛ぶリンク）を消すために最も重要です
+
+hideSidebarNav = true
+
+hideToolbar = true
+
+reportViewerTheme = "light"
+ 

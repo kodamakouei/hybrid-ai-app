@@ -20,53 +20,51 @@ TTS_VOICE = "Kore"
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ===============================
-# 音声再生
+# アバター口パクHTML注入
 # ===============================
-def base64_to_audio_url(base64_data, sample_rate):
-    js_code = f"""
-    <script>
-    function base64ToArrayBuffer(base64){{
-        const binary_string = window.atob(base64);
-        const len = binary_string.length;
-        const bytes = new Uint8Array(len);
-        for(let i=0;i<len;i++) bytes[i]=binary_string.charCodeAt(i);
-        return bytes.buffer;
-    }}
-    function pcmToWav(pcmData, sampleRate){{
-        const numChannels=1, bitsPerSample=16, bytesPerSample=bitsPerSample/8;
-        const blockAlign=numChannels*bytesPerSample, byteRate=sampleRate*blockAlign;
-        const dataSize=pcmData.byteLength;
-        const buffer=new ArrayBuffer(44+dataSize);
-        const view=new DataView(buffer);
-        let offset=0;
-        function writeString(v,o,s){{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));}}
-        writeString(view,offset,'RIFF'); offset+=4;
-        view.setUint32(offset,36+dataSize,true); offset+=4;
-        writeString(view,offset,'WAVE'); offset+=4;
-        writeString(view,offset,'fmt '); offset+=4;
-        view.setUint32(offset,16,true); offset+=4;
-        view.setUint16(offset,1,true); offset+=2;
-        view.setUint16(offset,numChannels,true); offset+=2;
-        view.setUint32(offset,sampleRate,true); offset+=4;
-        view.setUint32(offset,byteRate,true); offset+=4;
-        view.setUint16(offset,blockAlign,true); offset+=2;
-        view.setUint16(offset,bitsPerSample,true); offset+=2;
-        writeString(view,offset,'data'); offset+=4;
-        view.setUint32(offset,dataSize,true); offset+=4;
-        const pcm16=new Int16Array(pcmData);
-        for(let i=0;i<pcm16.length;i++){{view.setInt16(offset,pcm16[i],true); offset+=2;}}
-        return new Blob([buffer],{{type:'audio/wav'}});
-    }}
-    const pcmData=base64ToArrayBuffer('{base64_data}');
-    const wavBlob=pcmToWav(pcmData,{sample_rate});
-    const audioUrl=URL.createObjectURL(wavBlob);
-    const audio=new Audio(audioUrl);
-    audio.play().catch(e=>console.log("Autoplay error:",e));
-    </script>
-    """
-    components.html(js_code, height=0, width=0)
+def show_avatar():
+    img_close = base64.b64encode(open("yukki_close.png", "rb").read()).decode("utf-8")
+    img_open = base64.b64encode(open("yukki_open.png", "rb").read()).decode("utf-8")
 
-def generate_and_play_tts(text):
+    components.html(f"""
+    <style>
+    .avatar {{
+        width: 280px;
+        height: 280px;
+        border-radius: 16px;
+        border: 2px solid #f0a;
+        object-fit: contain;
+    }}
+    </style>
+    <div style="text-align:center;">
+      <img id="avatar" src="data:image/png;base64,{img_close}" class="avatar">
+    </div>
+
+    <script>
+    let talkingInterval = null;
+    function startTalking() {{
+        const avatar = document.getElementById('avatar');
+        let toggle = false;
+        if (talkingInterval) clearInterval(talkingInterval);
+        talkingInterval = setInterval(() => {{
+            avatar.src = toggle
+              ? "data:image/png;base64,{img_open}"
+              : "data:image/png;base64,{img_close}";
+            toggle = !toggle;
+        }}, 160); // ← パクパク速度（ms）
+    }}
+    function stopTalking() {{
+        clearInterval(talkingInterval);
+        const avatar = document.getElementById('avatar');
+        avatar.src = "data:image/png;base64,{img_close}";
+    }}
+    </script>
+    """, height=340)
+
+# ===============================
+# 音声再生＋口パク制御
+# ===============================
+def play_tts_with_lip(text):
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -79,46 +77,32 @@ def generate_and_play_tts(text):
     response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
     result = response.json()
 
-    # ✅ 新しい構造に対応
     try:
-        audio_data = result["contents"][0]["parts"][0]["inlineData"]
-    except KeyError:
-        st.error("❌ 音声データを取得できませんでした。レスポンスを確認してください。")
+        audio_data = result["contents"][0]["parts"][0]["inlineData"]["data"]
+    except Exception as e:
+        st.error("❌ 音声データ取得失敗")
         st.json(result)
         return
 
-    if "data" in audio_data:
-        mime_type = audio_data.get("mimeType", "audio/L16;rate=24000")
-        rate = int(mime_type.split("rate=")[1]) if "rate=" in mime_type else 24000
-        base64_to_audio_url(audio_data["data"], rate)
+    audio_bytes = base64.b64decode(audio_data)
+
+    # 🎬 JavaScript で口パク開始・停止
+    components.html("""
+    <script>
+    if (window.startTalking) startTalking();
+    setTimeout(() => { if (window.stopTalking) stopTalking(); }, 7000);
+    </script>
+    """, height=0)
+
+    st.audio(audio_bytes, format="audio/wav")
 
 # ===============================
 # Streamlit UI
 # ===============================
+st.set_page_config(page_title="ユッキー（口パク対応）", layout="wide")
+st.title("🎀 ユッキー（Vtuber風）")
 
-# ★★★ 修正箇所 1: アバターサイズを大きくするためのカスタムCSSを注入 ★★★
-# CSSは、Streamlitのチャットメッセージ内の画像（アバター）をターゲットにサイズを64pxに固定します。
-st.markdown("""
-<style>
-/* Chat Message Avatar Image (User and Assistant) */
-div[data-testid="stChatMessage"] img {
-    width: 300px !important;
-    height: 300px !important;
-    min-width: 300px !important;
-    min-height: 300px !important;
-    object-fit: cover !important; 
-}
-/* ユーザーアバター（絵文字）を大きく見せるための調整 */
-div[data-testid="stChatMessage"] .st-emotion-cache-1f1f2x2 {
-    font-size: 38px !important; 
-}
-
-</style>
-""", unsafe_allow_html=True)
-# ★★★ 修正箇所 1 終了 ★★★
-
-st.set_page_config(page_title="ユッキー", layout="wide")
-st.title("🎓 ユッキー（音声入力対応）")
+show_avatar()
 
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
@@ -129,7 +113,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # ===============================
-# 音声入力ボタン（🎙話す→質問欄に入力＆自動送信）
+# 音声認識ボタン（ブラウザ標準API）
 # ===============================
 components.html("""
 <script>
@@ -150,14 +134,10 @@ if (SpeechRecognition) {
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-
-        // Streamlitの質問欄（chat_input）を探す
         const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
         if (chatInput) {
             chatInput.value = text;
             chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-
-            // 🔥 自動で送信（Enterキーを押す）
             const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
             chatInput.dispatchEvent(enterEvent);
         }
@@ -175,10 +155,10 @@ if (SpeechRecognition) {
 """, height=130)
 
 # ===============================
-# チャット画面
+# チャットUI
 # ===============================
 for msg in st.session_state.messages:
-    avatar = "🧑" if msg["role"] == "user" else "yukki-icon.jpg"
+    avatar = "🧑" if msg["role"] == "user" else "yukki_close.png"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -187,11 +167,10 @@ if prompt := st.chat_input("質問を入力してください..."):
     with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="yukki-icon.jpg"):
-        with st.spinner("考え中..."):
+    with st.chat_message("assistant", avatar="yukki_close.png"):
+        with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt)
             text = response.text
             st.markdown(text)
-            st.info("🔊 音声出力中...")
-            generate_and_play_tts(text)
+            play_tts_with_lip(text)
             st.session_state.messages.append({"role": "assistant", "content": text})
