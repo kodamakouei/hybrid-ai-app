@@ -92,38 +92,28 @@ def play_tts_with_lip(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- CSSとJavaScriptを注入 ---
+# --- アバターとレイアウト用CSS/HTML/JSを注入 ---
 img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
 
 st.markdown(f"""
 <style>
-/* 左カラム（アバターの親）のスタイル */
-[data-testid="stVerticalBlock"]:has(> [data-testid="stHorizontalBlock"] > div:first-child .avatar-wrapper) {{
+/* Streamlitのメインコンテナのデフォルトpaddingをリセット */
+.main .block-container {{
+    padding: 0 !important;
+}}
+
+/* 左側の固定アバター領域 */
+.avatar-container {{
     position: fixed;
-    top: 0;
     left: 0;
-    width: 340px; /* カラムの幅に合わせる */
+    top: 0;
+    width: 340px;
     height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 100;
 }}
-
-/* チャット入力ボックスを画面下部に固定 */
-div[data-testid="stChatInputContainer"] {{
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    z-index: 101;
-}}
-
-/* 右カラムのコンテンツがチャット入力に隠れないように下部に余白を追加 */
-[data-testid="stVerticalBlock"]:has(> [data-testid="stHorizontalBlock"] > div:nth-child(2) .main-content-wrapper) {{
-    padding-bottom: 8rem;
-}}
-
 .avatar {{
     width: 280px;
     height: 280px;
@@ -132,8 +122,30 @@ div[data-testid="stChatInputContainer"] {{
     object-fit: cover;
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }}
+
+/* 右側のスクロール可能なコンテンツ領域 */
+.content-container {{
+    margin-left: 340px; /* アバター領域の幅だけ左にマージンを作成 */
+    padding: 2rem 2rem 7rem 2rem; /* 上下左右の余白と、下部入力欄のスペース確保 */
+}}
+
+/* チャット入力ボックスを画面下部全体に固定 */
+div[data-testid="stChatInputContainer"] {{
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 101;
+}}
 </style>
 
+<!-- 左側のアバターHTML -->
+<div class="avatar-container">
+  <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+</div>
+
+<!-- 口パク制御のJavaScript -->
 <script>
 const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
 const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
@@ -160,68 +172,61 @@ window.stopTalking = function() {{
 </script>
 """, unsafe_allow_html=True)
 
-# --- 2カラムレイアウト ---
-left_col, right_col = st.columns([1, 2]) # 比率を調整
+# --- 右側のコンテンツをラップするコンテナを開始 ---
+st.markdown('<div class="content-container">', unsafe_allow_html=True)
 
-with left_col:
-    # アバター用のラッパー（CSSでターゲットするため）
-    st.markdown(f'<div class="avatar-wrapper"><img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar"></div>', unsafe_allow_html=True)
+st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
-with right_col:
-    # 右カラムのコンテンツをラッパーで囲む（CSSでターゲットするため）
-    st.markdown('<div class="main-content-wrapper">', unsafe_allow_html=True)
-    
-    st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
+# Geminiクライアントとチャットセッションの初期化
+if "client" not in st.session_state:
+    st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
+if "chat" not in st.session_state:
+    if st.session_state.client:
+        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
+    else:
+        st.session_state.chat = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    # Geminiクライアントとチャットセッションの初期化
-    if "client" not in st.session_state:
-        st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
-    if "chat" not in st.session_state:
-        if st.session_state.client:
-            config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-            st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-        else:
-            st.session_state.chat = None
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# 音声認識ボタン
+st.subheader("音声入力")
+components.html("""
+<div id="mic-container">
+    <button onclick="window.parent.startRec()">🎙 話す</button>
+    <p id="mic-status">マイク停止中</p>
+</div>
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
+    window.parent.startRec = () => {
+        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
+        recognition.start();
+    };
+    recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        document.getElementById("mic-status").innerText = "✅ " + text;
+        window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
+    };
+    recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
+    recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
+} else {
+    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+}
+</script>
+""", height=130)
 
-    # 音声認識ボタン
-    st.subheader("音声入力")
-    components.html("""
-    <div id="mic-container">
-        <button onclick="window.parent.startRec()">🎙 話す</button>
-        <p id="mic-status">マイク停止中</p>
-    </div>
-    <script>
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = false;
-        window.parent.startRec = () => {
-            document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-            recognition.start();
-        };
-        recognition.onresult = (event) => {
-            const text = event.results[0][0].transcript;
-            document.getElementById("mic-status").innerText = "✅ " + text;
-            window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
-        };
-        recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
-        recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
-    } else {
-        document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
-    }
-    </script>
-    """, height=130)
+# チャットUI
+st.subheader("ユッキーとの会話履歴")
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+        st.markdown(msg["content"])
 
-    # チャットUI
-    st.subheader("ユッキーとの会話履歴")
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-            st.markdown(msg["content"])
-            
-    st.markdown('</div>', unsafe_allow_html=True)
+# --- 右側のコンテンツをラップするコンテナを閉じる ---
+st.markdown('</div>', unsafe_allow_html=True)
 
 
 # --- チャット入力と処理 ---
