@@ -26,17 +26,32 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 # ===============================
 def show_avatar():
     # ★実行環境に yukki-close.jpg と yukki-open.jpg が必要です
-    if not (os.path.exists("yukki-close.jpg") and os.path.exists("yukki-open.jpg")):
-        st.error("❌ yukki-close.jpg と yukki-open.jpg が同じフォルダにありません。")
-        st.stop()
+    
+    img_close_base64 = None
+    img_open_base64 = None
+    
+    # 画像ファイルの存在確認とBase64変換
+    try:
+        with open("yukki-close.jpg", "rb") as f:
+            img_close_base64 = base64.b64encode(f.read()).decode("utf-8")
+        with open("yukki-open.jpg", "rb") as f:
+            img_open_base64 = base64.b64encode(f.read()).decode("utf-8")
+        has_images = True
+    except FileNotFoundError:
+        has_images = False
+        # 画像がない場合はダミー画像を使用
+        # プレースホルダーのBase64データURI
+        img_close_base64 = "data:image/svg+xml;base64," + base64.b64encode(
+            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="#a00" font-family="sans-serif">❌画像が見つかりません</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-size="16" fill="#a00" font-family="sans-serif">yukki-close.jpg / yukki-open.jpg</text></svg>""".encode('utf-8')
+        ).decode("utf-8")
+        # 開口画像は閉口画像と同じで固定
+        img_open_base64 = img_close_base64
+        st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示します。")
 
-    # base64に変換してHTML/JSに埋め込む
-    with open("yukki-close.jpg", "rb") as f:
-        img_close = base64.b64encode(f.read()).decode("utf-8")
-    with open("yukki-open.jpg", "rb") as f:
-        img_open = base64.b64encode(f.read()).decode("utf-8")
 
     # StreamlitにHTML/JSを埋め込み（口パク制御）
+    # 画像ファイルが見つからない場合でも、このHTMLコンポーネントが描画されるため、
+    # .avatar-containerのCSSが適用され、アバターの固定と右側のオフセットが機能します。
     components.html(f"""
     <style>
     /* アバターを配置するコンテナのスタイル */
@@ -63,7 +78,7 @@ def show_avatar():
     }}
     </style>
     <div class="avatar-container">
-      <img id="avatar" src="data:image/jpeg;base64,{img_close}" class="avatar">
+      <img id="avatar" src="{img_close_base64}" class="avatar">
     </div>
 
     <script>
@@ -71,20 +86,26 @@ def show_avatar():
     let talkingInterval = null;
     function startTalking() {{
         const avatar = document.getElementById('avatar');
-        let toggle = false;
-        if (talkingInterval) clearInterval(talkingInterval);
-        talkingInterval = setInterval(() => {{
-            avatar.src = toggle
-              ? "data:image/jpeg;base64,{img_open}" // 口が開いた画像
-              : "data:image/jpeg;base64,{img_close}"; // 口が閉じた画像
-            toggle = !toggle;
-        }}, 160); // パクパク速度（ミリ秒）
+        // 画像がある場合のみ口パクを実行
+        if ({'true' if has_images else 'false'}) {{ 
+            let toggle = false;
+            if (talkingInterval) clearInterval(talkingInterval);
+            talkingInterval = setInterval(() => {{
+                avatar.src = toggle
+                ? "data:image/jpeg;base64,{img_open_base64}" // 口が開いた画像
+                : "data:image/jpeg;base64,{img_close_base64}"; // 口が閉じた画像
+                toggle = !toggle;
+            }}, 160);
+        }}
     }}
     // 口パク停止関数
     function stopTalking() {{
         clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
-        avatar.src = "data:image/jpeg;base64,{img_close}";
+        // 画像がある場合のみ閉口画像に戻す
+        if ({'true' if has_images else 'false'}) {{
+            avatar.src = "data:image/jpeg;base64,{img_close_base64}";
+        }}
     }}
     </script>
     """, height=340)
