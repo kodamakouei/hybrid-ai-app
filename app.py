@@ -50,7 +50,7 @@ def get_avatar_images():
         # サイドバーに警告を表示
         st.sidebar.warning("⚠️ アバター画像ファイルが見つかりません。")
         placeholder_svg = base64.b64encode(
-            f"""<svg width="280" height="280" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
+            f"""<svg width="300" height="300" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
