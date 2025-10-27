@@ -46,20 +46,20 @@ def show_avatar():
         ).decode("utf-8")
         # 開口画像は閉口画像と同じで固定
         img_open_base64 = img_close_base64
-        st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示します。")
+        # st.warning("⚠️ アバター画像ファイルが見つかりません。プレースホルダーを表示します。", icon="🖼️")
+        # st.toast()はUIに残りすぎるため、代わりにコメントアウトしました。
 
 
     # StreamlitにHTML/JSを埋め込み（口パク制御）
-    # 画像ファイルが見つからない場合でも、このHTMLコンポーネントが描画されるため、
-    # .avatar-containerのCSSが適用され、アバターの固定と右側のオフセットが機能します。
+    # .avatar-container の CSS を強化します
     components.html(f"""
     <style>
     /* アバターを配置するコンテナのスタイル */
     .avatar-container {{
         /* 画面左上に固定 (Fixed Positioning) */
-        position: fixed;
-        top: 60px; /* Streamlitヘッダーを考慮して調整 */
-        left: 20px;
+        position: fixed !important; /* 強制的に固定 */
+        top: 60px !important; /* Streamlitヘッダーを考慮して調整 */
+        left: 20px !important; /* 左端から20px */
         width: 300px;
         z-index: 100; /* 他の要素より手前に表示 */
         text-align: center;
@@ -190,12 +190,24 @@ st.markdown("""
 <style>
 /* Streamlitのメインコンテンツの左側マージンを設定し、アバターと重ならないように右側にオフセット */
 .main > div {{
+    /* Streamlitの内部コンテナ（.main > div）にマージンを設定してコンテンツ全体を右に移動 */
     padding-left: 350px !important; /* アバターの幅(300px)より少し大きく */
 }}
-/* チャット入力フィールドも右側エリアに追従 */
-.stChatInput {{
-    margin-left: -330px; 
-    padding-right: 20px;
+/* チャット入力フィールドの親コンテナにも同様にオフセットを適用 */
+.stChatInput > div {{
+    margin-left: 330px; 
+    width: calc(100% - 330px);
+}}
+/* ユーザーのチャット入力欄自体を右側エリアに合わせる */
+div[data-testid="stChatInputContainer"] {{
+    position: fixed; /* 常に画面下に固定 */
+    bottom: 0px;
+    left: 330px; /* アバターの幅を避ける */
+    right: 0px;
+    z-index: 1000;
+    background: white;
+    padding: 10px 20px 10px 10px;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
 }}
 </style>
 """, unsafe_allow_html=True)
