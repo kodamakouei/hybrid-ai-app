@@ -207,5 +207,6 @@ if prompt and not st.session_state.processing:
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
-    # ページを再実行。この時点では processing フラグは True のまま。
+    # ページを再実行し、現在のスクリプトの実行を即座に停止する
     st.rerun()
+    st.stop()
