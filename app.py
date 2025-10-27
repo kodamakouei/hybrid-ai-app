@@ -89,8 +89,12 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
-if "new_prompt" not in st.session_state:
-    st.session_state.new_prompt = None
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+
+# --- 処理中フラグを、毎回の実行開始時にリセットする ---
+if st.session_state.processing:
+    st.session_state.processing = False
 
 # --- サイドバー ---
 with st.sidebar:
@@ -99,7 +103,8 @@ with st.sidebar:
     <style>
     section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
     .main {{ background-color: #FFFFFF !important; }}
-    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; margin: 20px auto; display: block; }}
+    .st-emotion-cache-1y4p8pa {{ display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }}
+    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     <script>
@@ -137,14 +142,9 @@ if st.session_state.get("audio_to_play"):
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー")
 
-# チャット履歴の表示
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
-        st.markdown(msg["content"])
-
-# --- 入力ウィジェット ---
+# --- 入力処理とAPI呼び出し ---
+# このブロックは、新しいプロンプトがある場合にのみ実行される
 prompt = st.chat_input("質問を入力してください...")
-st.subheader("音声入力")
 voice_prompt = components.html("""
 <div id="mic-container">
     <button onclick="startRec()">🎙 話す</button>
@@ -170,26 +170,19 @@ function startRec() {{
 </script>
 """, height=130)
 
-# 入力があった場合、セッションステートに保存
-if prompt:
-    st.session_state.new_prompt = prompt
 if voice_prompt:
-    st.session_state.new_prompt = voice_prompt
+    prompt = voice_prompt
 
-# セッションステートのプロンプトを処理し、処理後にクリアする
-if st.session_state.new_prompt:
-    final_prompt = st.session_state.new_prompt
-    st.session_state.new_prompt = None  # 入力値を即座にクリア
-
-    st.session_state.messages.append({"role": "user", "content": final_prompt})
+if prompt and not st.session_state.processing:
+    st.session_state.processing = True
+    st.session_state.messages.append({"role": "user", "content": prompt})
     
     if st.session_state.client:
         try:
             if st.session_state.chat is None:
                 config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
                 st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-
-            response = st.session_state.chat.send_message(final_prompt)
+            response = st.session_state.chat.send_message(prompt)
             text = response.text
             st.session_state.messages.append({"role": "assistant", "content": text})
             generate_and_store_tts(text)
@@ -197,7 +190,13 @@ if st.session_state.new_prompt:
             error_message = f"API呼び出し中にエラーが発生しました: {e}"
             st.session_state.messages.append({"role": "assistant", "content": error_message})
     else:
-        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていません。"})
+        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
     st.rerun()
-    
+
+# --- チャット履歴の表示 ---
+# このブロックは、入力処理とは独立して、毎回実行される
+st.subheader("ユッキーとの会話履歴")
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+        st.markdown(msg["content"])
