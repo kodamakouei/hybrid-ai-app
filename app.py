@@ -1,6 +1,6 @@
 import streamlit as st
 from google import genai
-import base64, json, time, requests
+import base64, json, requests
 import streamlit.components.v1 as components
 
 # ===============================
@@ -20,11 +20,22 @@ TTS_VOICE = "Kore"
 API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ===============================
-# アバター口パクHTML注入
+# 画像アップロード＋口パク設定
 # ===============================
 def show_avatar():
-    img_close = base64.b64encode(open("yukki-close.jpg", "rb").read()).decode("utf-8")
-    img_open = base64.b64encode(open("yukki-open.jpg", "rb").read()).decode("utf-8")
+    st.subheader("🎨 アバター設定")
+    col1, col2 = st.columns(2)
+    with col1:
+        close_file = st.file_uploader("口を閉じた画像をアップロード", type=["jpg", "png"], key="close")
+    with col2:
+        open_file = st.file_uploader("口を開いた画像をアップロード", type=["jpg", "png"], key="open")
+
+    if not close_file or not open_file:
+        st.warning("⛔ 2枚の画像をアップロードしてください。")
+        st.stop()
+
+    img_close = base64.b64encode(close_file.read()).decode("utf-8")
+    img_open = base64.b64encode(open_file.read()).decode("utf-8")
 
     components.html(f"""
     <style>
@@ -33,7 +44,7 @@ def show_avatar():
         height: 280px;
         border-radius: 16px;
         border: 2px solid #f0a;
-        object-fit: contain;
+        object-fit: cover;
     }}
     </style>
     <div style="text-align:center;">
@@ -51,7 +62,7 @@ def show_avatar():
               ? "data:image/png;base64,{img_open}"
               : "data:image/png;base64,{img_close}";
             toggle = !toggle;
-        }}, 160); // ← パクパク速度（ms）
+        }}, 160);
     }}
     function stopTalking() {{
         clearInterval(talkingInterval);
@@ -79,14 +90,14 @@ def play_tts_with_lip(text):
 
     try:
         audio_data = result["contents"][0]["parts"][0]["inlineData"]["data"]
-    except Exception as e:
+    except Exception:
         st.error("❌ 音声データ取得失敗")
         st.json(result)
         return
 
     audio_bytes = base64.b64decode(audio_data)
 
-    # 🎬 JavaScript で口パク開始・停止
+    # 🎬 JavaScriptで口パクアニメーション制御
     components.html("""
     <script>
     if (window.startTalking) startTalking();
@@ -100,10 +111,11 @@ def play_tts_with_lip(text):
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー（口パク対応）", layout="wide")
-st.title("🎀 ユッキー（Vtuber風）")
+st.title("🎀 ユッキー（Vtuber風 AIアシスタント）")
 
 show_avatar()
 
+# Gemini初期化
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY)
 if "chat" not in st.session_state:
@@ -158,7 +170,7 @@ if (SpeechRecognition) {
 # チャットUI
 # ===============================
 for msg in st.session_state.messages:
-    avatar = "🧑" if msg["role"] == "user" else "yukki-close.jpg"
+    avatar = "🧑" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
 
@@ -167,7 +179,7 @@ if prompt := st.chat_input("質問を入力してください..."):
     with st.chat_message("user", avatar="🧑"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="yukki-close.jpg"):
+    with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが考え中..."):
             response = st.session_state.chat.send_message(prompt)
             text = response.text
