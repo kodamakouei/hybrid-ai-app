@@ -144,9 +144,29 @@ def play_tts_with_lip(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
+# --- CSSを注入してレイアウトを調整 ---
+st.markdown("""
+<style>
+/* チャット入力ボックスのコンテナを画面下部全体に固定 */
+div[data-testid="stChatInputContainer"] {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    padding: 1rem 1rem 1.5rem 1rem;
+    background-color: white;
+    z-index: 101; /* アバターより手前に */
+    border-top: 1px solid #e6e6e6;
+}
+/* メインコンテンツ（カラムを含む）が入力ボックスに隠れないように、下部に余白を追加 */
+.main .block-container {
+    padding-bottom: 6rem; /* 入力ボックスの高さに応じて調整 */
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- レイアウトを2カラムに分割 ---
-# 左カラム: アバター用 (幅を約340pxに設定)
-# 右カラム: チャットコンテンツ用
 left_col, right_col = st.columns([1, 3])
 
 with left_col:
@@ -155,30 +175,6 @@ with left_col:
 
 with right_col:
     # --- 右カラムのコンテンツ ---
-
-    # --- CSSを注入してチャット入力を画面下部に固定 ---
-    st.markdown("""
-    <style>
-    /* チャット入力ボックスのコンテナ */
-    div[data-testid="stChatInputContainer"] {
-        position: fixed; /* 画面に固定 */
-        bottom: 0;
-        /* right_colの範囲に合わせる */
-        left: 25%; /* カラムの比率(1:3)から左側の25%をオフセット */
-        right: 0;
-        width: 75%; /* カラムの比率(1:3)から幅を75%に */
-        padding: 1rem 1rem 1.5rem 1rem;
-        background-color: white;
-        z-index: 101; /* アバターより手前に */
-        border-top: 1px solid #e6e6e6;
-    }
-    /* チャット履歴が入力ボックスに隠れないように、下部に余白を追加 */
-    .st-emotion-cache-1fjr796 {
-        padding-bottom: 5rem; /* 入力ボックスの高さ分 */
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
     # Geminiクライアントとチャットセッションの初期化
@@ -242,40 +238,40 @@ with right_col:
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
 
-    # ユーザーからの新しい入力
-    if prompt := st.chat_input("質問を入力してください..."):
-        # ユーザーメッセージをセッションに追加し、表示
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user", avatar="🧑"):
-            st.markdown(prompt)
+# --- チャット入力と処理 (カラムの外に配置) ---
+if prompt := st.chat_input("質問を入力してください..."):
+    # ユーザーメッセージをセッションに追加
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # アシスタントの応答
-        with st.chat_message("assistant", avatar="🤖"):
-            if not st.session_state.chat:
-                st.error("APIキーが設定されていないため、AIと通信できません。")
-            else:
-                with st.spinner("ユッキーが考え中..."):
-                    response = st.session_state.chat.send_message(prompt)
-                    text = response.text
-                    st.markdown(text)
-                    play_tts_with_lip(text)
-                    st.session_state.messages.append({"role": "assistant", "content": text})
+    # AIからの応答を取得
+    if st.session_state.chat:
+        with st.spinner("ユッキーが考え中..."):
+            response = st.session_state.chat.send_message(prompt)
+            text = response.text
+            st.session_state.messages.append({"role": "assistant", "content": text})
+            # 音声再生は応答が確定してから
+            play_tts_with_lip(text)
+    else:
+        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
+    
+    # ページを再実行して、新しいメッセージを即座に表示
+    st.rerun()
 
-    # 音声認識からチャット入力へテキストを転送するJavaScript
-    components.html("""
-    <script>
-    window.addEventListener('message', event => {
-        if (event.data.type === 'SET_CHAT_INPUT') {
-            const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-            if (chatInput) {
-                chatInput.value = event.data.text;
-                // イベントを発火させてStreamlitに値の変更を認識させる
-                chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                // Enterキーを押して送信
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
-                chatInput.dispatchEvent(enterEvent);
-            }
+# --- 音声認識からチャット入力へテキストを転送するJavaScript ---
+components.html("""
+<script>
+window.addEventListener('message', event => {
+    if (event.data.type === 'SET_CHAT_INPUT') {
+        const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+        if (chatInput) {
+            chatInput.value = event.data.text;
+            // イベントを発火させてStreamlitに値の変更を認識させる
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            // Enterキーを押して送信
+            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
+            chatInput.dispatchEvent(enterEvent);
         }
-    });
-    </script>
-    """, height=0)
+    }
+});
+</script>
+""", height=0)
