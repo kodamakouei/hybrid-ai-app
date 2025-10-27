@@ -101,9 +101,14 @@ with st.sidebar:
     # アバターと口パク用のCSSとHTML
     st.markdown(f"""
     <style>
-    /* サイドバー自体の幅を広げる */
+    /* サイドバー自体の幅と背景色を設定 */
     section[data-testid="stSidebar"] {{
-        width: 450px !important; /* 画像サイズ(400px)より少し大きく設定 */
+        width: 450px !important;
+        background-color: #FFFFFF !important; /* 背景色を白に設定 */
+    }}
+    /* メインコンテンツの背景色を白に設定（デフォルトですが念のため） */
+    .main {{
+        background-color: #FFFFFF !important;
     }}
     /* サイドバーの中央にアバターを配置 */
     .st-emotion-cache-1y4p8pa {{
