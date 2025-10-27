@@ -27,7 +27,6 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 def show_avatar():
     # ★実行環境に yukki-close.jpg と yukki-open.jpg が必要です
     if not (os.path.exists("yukki-close.jpg") and os.path.exists("yukki-open.jpg")):
-        # 画像ファイルがない場合はエラーメッセージを表示して停止
         st.error("❌ yukki-close.jpg と yukki-open.jpg が同じフォルダにありません。")
         st.stop()
 
@@ -40,6 +39,21 @@ def show_avatar():
     # StreamlitにHTML/JSを埋め込み（口パク制御）
     components.html(f"""
     <style>
+    /* アバターを配置するコンテナのスタイル */
+    .avatar-container {{
+        /* 画面左上に固定 (Fixed Positioning) */
+        position: fixed;
+        top: 60px; /* Streamlitヘッダーを考慮して調整 */
+        left: 20px;
+        width: 300px;
+        z-index: 100; /* 他の要素より手前に表示 */
+        text-align: center;
+        /* 背景色を追加して、スクロール時にチャットと重なるのを防ぐ */
+        background: white; 
+        padding: 10px;
+        border-radius: 16px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }}
     .avatar {{
         width: 280px;
         height: 280px;
@@ -48,7 +62,7 @@ def show_avatar():
         object-fit: cover;
     }}
     </style>
-    <div style="text-align:center;">
+    <div class="avatar-container">
       <img id="avatar" src="data:image/jpeg;base64,{img_close}" class="avatar">
     </div>
 
@@ -76,10 +90,9 @@ def show_avatar():
     """, height=340)
 
 # ===============================
-# 音声再生＋口パク制御 (修正済み)
+# 音声再生＋口パク制御
 # ===============================
 def play_tts_with_lip(text):
-    # Gemini TTS APIへのペイロード構築
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -91,12 +104,11 @@ def play_tts_with_lip(text):
     
     headers = {'Content-Type': 'application/json'}
     
-    # 指数バックオフ付きのAPI呼び出し
     MAX_RETRIES = 5
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
-            response.raise_for_status() # HTTPエラーを確認
+            response.raise_for_status()
             result = response.json()
             break
         except requests.exceptions.RequestException as e:
@@ -109,47 +121,34 @@ def play_tts_with_lip(text):
                 return
 
     try:
-        # resultからbase64エンコードされたオーディオデータを抽出 (デコードせずそのまま使用)
         audio_data_base64 = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except Exception:
         st.error("❌ 音声データ取得失敗: APIレスポンス構造が予期されたものではありません。")
         return
 
-    # 🎬 JavaScriptで口パクアニメーション制御と自動再生
-    # st.audioを使わず、HTML/JSで <audio autoplay> を生成し、onendedで口パクを停止させる
     html_audio_player = f"""
     <script>
-    // window.startTalkingとwindow.stopTalkingはshow_avatar()で定義されています
     if (window.startTalking) startTalking();
     
-    // Audioオブジェクトを生成し、Base64データURIを設定
     const audio = new Audio();
-    // TTS APIはPCM16を返すため、ここでは 'audio/wav' としてBase64データを扱います
     audio.src = 'data:audio/wav;base64,{audio_data_base64}'; 
     audio.autoplay = true;
 
-    // 音声再生が終了したら口パクを停止
     audio.onended = function() {{
         if (window.stopTalking) stopTalking();
     }};
     
-    // 自動再生を試みる (ブラウザのポリシーでブロックされる可能性がある)
     audio.play().catch(e => {{
         console.error("Audio playback failed (usually due to autoplay policy):", e);
-        // 再生に失敗した場合でも、口パクを停止させる
         if (window.stopTalking) stopTalking(); 
     }});
 
-    // Streamlitのコンポーネントとしてオーディオを再生させるため、
-    // UIからは見えない位置にオーディオ要素を一時的に挿入 (ただし、自動再生の回避策として機能しない場合もあります)
     const container = document.createElement('div');
     container.style.display = 'none';
     container.appendChild(audio);
     document.body.appendChild(container);
     </script>
     """
-    # components.htmlでオーディオ再生と口パク制御を同時に行う
-    # height=0, width=0に設定することで、このコンポーネント自体を非表示にします
     components.html(html_audio_player, height=0, width=0)
 
 # ===============================
@@ -158,8 +157,28 @@ def play_tts_with_lip(text):
 st.set_page_config(page_title="ユッキー（口パク対応）", layout="wide")
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 
-# アバターの表示とJS関数の埋め込み
+# ====================================================================
+# 【固定アバター】アバターを画面左上に固定表示
+# ====================================================================
 show_avatar()
+
+# ====================================================================
+# 【CSS注入】メインコンテンツ（チャット履歴、音声入力など）を右側にオフセット
+# ====================================================================
+st.markdown("""
+<style>
+/* Streamlitのメインコンテンツの左側マージンを設定し、アバターと重ならないように右側にオフセット */
+.main > div {{
+    padding-left: 350px !important; /* アバターの幅(300px)より少し大きく */
+}}
+/* チャット入力フィールドも右側エリアに追従 */
+.stChatInput {{
+    margin-left: -330px; 
+    padding-right: 20px;
+}}
+</style>
+""", unsafe_allow_html=True)
+
 
 # Geminiクライアントとチャットセッションの初期化
 if "client" not in st.session_state:
@@ -170,10 +189,18 @@ if "chat" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+
+# ====================================================================
+# 【右側コンテンツ】アバターの固定領域を避けるためのオフセット空間
+# ====================================================================
+# アバターの高さ+タイトル分、下にオフセットするためのダミー要素 (右側エリアの先頭に配置)
+st.markdown("<div style='height: 380px;'></div>", unsafe_allow_html=True)
+
+
 # ===============================
-# 音声認識ボタン（ブラウザ標準API）
+# 音声認識ボタン（右側エリアに配置）
 # ===============================
-# HTML/JSでブラウザのSpeechRecognition APIを使い、結果をStreamlitのチャット入力欄に注入する
+st.subheader("音声入力")
 components.html("""
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -181,46 +208,37 @@ let recognition;
 
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP'; // 日本語を設定
+    recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    // 認識開始ボタンのクリックハンドラ
     function startRec() {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     }
 
-    // 認識結果が出たときのハンドラ
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        
-        // Streamlitのチャット入力エリアを探してテキストを注入
         const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
         if (chatInput) {
             chatInput.value = text;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true })); // inputイベントを発火
-            
-            // エンターキーイベントを発火させて送信をシミュレート
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
             const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
             chatInput.dispatchEvent(enterEvent);
         }
     };
 
-    // 認識エラー時のハンドラ
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
 
-    // 認識が終了した時のハンドラ（続けて認識する場合はここでrecognition.start()を呼ぶ）
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
         }
     }
 } else {
-    // 対応していないブラウザの場合
     document.write("このブラウザは音声認識に対応していません。");
 }
 </script>
@@ -228,9 +246,11 @@ if (SpeechRecognition) {
 <p id="mic-status">マイク停止中</p>
 """, height=130)
 
+
 # ===============================
-# チャットUI
+# チャットUI（右側エリアに配置）
 # ===============================
+st.subheader("ユッキーとの会話履歴")
 # 過去のメッセージを表示
 for msg in st.session_state.messages:
     avatar = "🧑" if msg["role"] == "user" else "🤖"
