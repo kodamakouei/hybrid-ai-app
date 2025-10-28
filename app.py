@@ -188,7 +188,7 @@ st.markdown(f"""
 /* Streamlitのヘッダー/トップバーを非表示にする（任意） */
 header {{ visibility: hidden; }}
 
-/* サイドバーの幅と固定位置を設定 */
+/* サイドバーのスタイルと固定位置 */
 section[data-testid="stSidebar"] {{ 
     width: {SIDEBAR_WIDTH} !important; 
     min-width: {SIDEBAR_WIDTH} !important;
@@ -199,25 +199,23 @@ section[data-testid="stSidebar"] {{
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     z-index: 1000;
     
-    /* 変更点: サイドバーを固定する */
-    position: fixed; 
+    /* サイドバーを固定 */
+    position: fixed !important; /* 変更点: !important を追加 */
     left: 0;
     top: 0; 
+    display: block !important; /* 変更点: 表示を強制 */
 }}
 
-/* メインコンテンツのコンテナにサイドバーの幅だけ左マージンを設定し、横に並ぶようにする */
-/* stAppのラッパーを調整 */
+/* メインコンテンツのコンテナ（stApp）に左マージンを設定 */
 .stApp {{
     /* Streamlitのメインコンテンツのラッパー */
-    /* 変更点: サイドバーの幅（%）に合わせてマージンを設定 */
     margin-left: {SIDEBAR_WIDTH}; 
-    padding-left: 1rem; /* 必要に応じて調整 */
+    padding-left: 1rem; 
     padding-right: 1rem;
     padding-top: 1rem;
 }}
 
-/* アバターを中央に配置 */
-/* st-emotion-cache-vk3ypz は新しいStreamlitのSidebar内のコンテナ */
+/* サイドバー内のアバターを中央に配置 */
 [data-testid="stSidebarContent"] > div:first-child {{
     display: flex;
     flex-direction: column;
@@ -226,7 +224,6 @@ section[data-testid="stSidebar"] {{
     padding-top: 50px;
 }}
 .avatar {{ 
-    /* サイドバーの幅に合わせてアバターの最大幅を調整 */
     max-width: 90%; 
     height: auto; 
     border-radius: 16px; 
@@ -266,8 +263,6 @@ with st.sidebar:
     
     // グローバルな口パク開始関数
     window.startTalking = function() {{
-        // window.parent.document.getElementById('avatar') ではなく、
-        // Streamlitのコンポーネント内で直接要素を取得するように変更（安全のため）
         const avatar = document.getElementById('avatar'); 
         if ({'true' if has_images else 'false'} && avatar) {{
             let toggle = false;
@@ -413,4 +408,3 @@ window.addEventListener('message', event => {
 </script>
 """, height=0)
 
-#
