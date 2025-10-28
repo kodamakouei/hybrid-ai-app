@@ -33,7 +33,8 @@ except:
 def get_avatar_images():
     loaded_images = {}
     
-    # 確実な動作のため、常に動作するダミーのBase64 SVG画像を使用します。
+    # ユーザーが特定の画像（yukki-closed.jpg, yukki-open.jpg）をアップロードすればそれを優先的に使用できますが、
+    # 確実な動作のため、ここでは常に動作するダミーのBase64 SVG画像を使用します。
     
     # 口閉じの画像 (青色のプレースホルダー)
     closed_svg = f"""<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#4a90e2"/><text x="100" y="100" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle">Yukki (閉)</text></svg>"""
@@ -52,13 +53,11 @@ def generate_and_store_tts(text):
     """テキストからTTSデータを生成し、セッションステートに保存する"""
     if not API_KEY:
         st.session_state.tts_data = None
-        st.error("エラー: APIキーが設定されていないため、音声生成をスキップします。")
         return
 
     # 指数バックオフを用いたAPI呼び出し
     MAX_RETRIES = 3
     RETRY_DELAY = 1
-    SUCCESS = False
 
     for attempt in range(MAX_RETRIES):
         payload = {
@@ -93,20 +92,18 @@ def generate_and_store_tts(text):
                     "audio_data": audio_data,
                     "mime_type": mime_type
                 }
-                SUCCESS = True
-                break # 成功したらループを抜ける
+                return # 成功したら終了
             else:
+                st.session_state.tts_data = None
                 st.error("TTS応答から音声データが取得できませんでした。")
-                break # 失敗したらループを抜ける (リトライ対象外)
+                return # 失敗したら終了 (リトライ対象外)
 
         except requests.exceptions.RequestException as e:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY * (2 ** attempt))
             else:
                 st.error(f"TTS APIエラー: {e}")
-    
-    if not SUCCESS:
-        st.session_state.tts_data = None
+                st.session_state.tts_data = None
 
 
 # ===============================
@@ -144,23 +141,10 @@ def talking_avatar_ui(images):
             font-size: 1rem;
             color: #333;
         }}
-        #manual-play-button {{
-            margin-top: 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            box-shadow: 0 4px #1e7e34;
-            display: none; /* 初期状態では非表示 */
-        }}
     </style>
     <div class="avatar-container">
         <img id="avatar-image" src="{images['closed']}" alt="Yukki Avatar">
         <div class="status-text" id="status-text">準備完了</div>
-        <button id="manual-play-button">▶️ 音声を手動で再生</button>
         <audio id="audio-player" controls preload="auto"></audio>
     </div>
 
@@ -168,11 +152,9 @@ def talking_avatar_ui(images):
         const audioPlayer = document.getElementById('audio-player');
         const avatarImage = document.getElementById('avatar-image');
         const statusText = document.getElementById('status-text');
-        const manualPlayButton = document.getElementById('manual-play-button');
         const closedImgSrc = "{images['closed']}";
         const openImgSrc = "{images['open']}";
         let animationInterval = null;
-        let isAudioLoaded = false;
 
         // PCMデータをWAVに変換するヘルパー関数群
         function base64ToArrayBuffer(base64) {{
@@ -186,7 +168,6 @@ def talking_avatar_ui(images):
         }}
 
         function pcmToWav(pcm16, sampleRate) {{
-            // ... (WAV変換ロジックは変更なし) ...
             const pcmData = pcm16.buffer;
             const numChannels = 1;
             const bytesPerSample = 2; // Int16
@@ -239,7 +220,6 @@ def talking_avatar_ui(images):
             let isOpen = true;
             statusText.textContent = "ユッキーが話しています...";
             avatarImage.style.transform = 'scale(1.05)'; // 話し始めに少し拡大
-            manualPlayButton.style.display = 'none'; // 再生中はボタンを非表示
 
             animationInterval = setInterval(() => {{
                 if (isOpen) {{
@@ -250,7 +230,7 @@ def talking_avatar_ui(images):
                 isOpen = !isOpen;
             }}, 120); // 120msごとに画像を切り替える
 
-            // audioPlayer.play() は onplay イベントがすでに担当
+            audioPlayer.play();
         }}
 
         function stopAnimation() {{
@@ -259,8 +239,6 @@ def talking_avatar_ui(images):
             avatarImage.src = closedImgSrc;
             statusText.textContent = "準備完了";
             avatarImage.style.transform = 'scale(1.0)';
-            isAudioLoaded = false;
-            // 再生終了後もボタンは非表示のまま
         }}
 
         // イベントリスナー
@@ -269,56 +247,37 @@ def talking_avatar_ui(images):
         audioPlayer.onerror = function() {{
             console.error("Audio playback error.");
             stopAnimation();
-            statusText.textContent = "エラー: 音声ファイルの再生に失敗しました";
-            manualPlayButton.style.display = 'none';
         }};
         
-        // 手動再生ボタンのイベント
-        manualPlayButton.onclick = function() {{
-            if (isAudioLoaded) {{
-                audioPlayer.play().catch(e => {{
-                    console.error("Manual play failed:", e);
-                    statusText.textContent = "エラー: 再生に失敗しました";
-                }});
-            }}
-        }};
-
         // Streamlitからのメッセージを受信し、音声を再生
         window.addEventListener('message', event => {{
             if (event.data.type === 'PLAY_TTS' && event.data.audioBase64) {{
                 const audioData = event.data.audioBase64;
                 const mimeType = event.data.mimeType || 'audio/L16;rate=24000';
                 
+                // MIMEタイプからサンプリングレートを抽出
                 const rateMatch = mimeType.match(/rate=(\d+)/);
                 const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
                 
+                // PCM16データをWAV形式に変換
                 const pcmData = base64ToArrayBuffer(audioData);
                 const pcm16 = new Int16Array(pcmData);
                 const wavBlob = pcmToWav(pcm16, sampleRate);
                 
+                // Blob URLを作成し、Audio要素に設定
                 const audioUrl = URL.createObjectURL(wavBlob);
                 audioPlayer.src = audioUrl;
-                isAudioLoaded = true;
                 
-                // 自動再生を試みる
-                audioPlayer.play()
-                    .then(() => {{
-                        // 成功: アニメーションは onplay で開始
-                        console.log("Auto-play successful.");
-                    }})
-                    .catch(e => {{
-                        // 失敗: 自動再生がブロックされた場合
-                        console.warn("Auto-play blocked, showing manual button.");
-                        statusText.textContent = "▶️ 再生ボタンを押してください";
-                        manualPlayButton.style.display = 'block';
-                    }});
+                // 再生開始（onplayイベントでアニメーションが開始される）
+                // audioPlayer.load(); // 不要な場合が多い
+                audioPlayer.play().catch(e => console.error("Auto-play failed:", e));
             }}
         }});
     </script>
     """
     
     # UIコンポーネントとして表示
-    components.html(html_content, height=250) # ボタンの分だけ高さを調整
+    components.html(html_content, height=200)
 
 # ===============================
 # メイン処理
@@ -338,6 +297,7 @@ talking_avatar_ui(avatar_images)
 # --- Streamlitセッション状態の初期化 ---
 if "client" not in st.session_state:
     if API_KEY:
+        # APIキーが空でない場合はクライアントを初期化
         st.session_state.client = genai.Client(api_key=API_KEY)
     else:
         st.error("Gemini APIキーが設定されていません。")
@@ -354,6 +314,7 @@ if 'tts_data' not in st.session_state:
     st.session_state.tts_data = None
     
 # --- 音声認識UIの配置 ---
+# (音声認識UIは前回のものをそのまま使用します)
 speech_to_text_html = """
 <div id="mic-container" style="text-align: center; margin-top: 10px;">
     <button id="mic-button" style="padding: 10px 20px; font-size: 16px; background-color: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px #2a70c2;">
@@ -382,6 +343,7 @@ if ('webkitSpeechRecognition' in window) {
 
     recognition.onresult = (event) => {
         const result = event.results[0][0].transcript;
+        // Streamlitのチャット入力欄にテキストを送信
         window.parent.postMessage({
             type: 'SET_CHAT_INPUT',
             text: result
@@ -448,10 +410,12 @@ components.html("""
 <script>
 window.addEventListener('message', event => {
     if (event.data.type === 'SET_CHAT_INPUT') {
+        // Streamlitのチャット入力要素を見つけて値を設定する
         const chatInput = window.parent.document.querySelector('input[placeholder="質問を入力してください..."]');
         if (chatInput) {
             chatInput.value = event.data.text;
             
+            // エンターキーイベントを発火させて入力を確定させる
             const event = new KeyboardEvent('keydown', {
                 key: 'Enter',
                 keyCode: 13,
@@ -480,7 +444,6 @@ if st.session_state.get('tts_data'):
     // アニメーションUIをホストしているiframeにメッセージを送信
     const iframes = window.parent.document.querySelectorAll('iframe');
     iframes.forEach(iframe => {{
-        // iframeの中のHTMLコンポーネントにメッセージを送信
         iframe.contentWindow.postMessage(ttsData, '*');
     }});
     </script>
@@ -489,3 +452,7 @@ if st.session_state.get('tts_data'):
     
     # セッションステートからデータをクリアして、再実行を防ぐ
     del st.session_state['tts_data']
+
+# アバター画像がない場合のエラーを最後に表示 (今回はダミー画像で回避済み)
+if not avatar_images:
+    st.error("アバター画像を正しく設定するか、アップロードしてください。")
