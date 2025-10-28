@@ -167,22 +167,10 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-   
-    # 画像がなければ警告を表示
-    if not has_images:
-        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
- 
-    # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
+
     st.markdown(f"""
     <style>
-    /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
-    /* サイドバーコンテナ自体を固定 */
-    section[data-testid="stSidebar"] {{
-        width: {SIDEBAR_FIXED_WIDTH} !important;
-        min-width: {SIDEBAR_FIXED_WIDTH} !important;
-        max-width: {SIDEBAR_FIXED_WIDTH} !important;
-        background-color: #FFFFFF !important;
-    }}
+    section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
     /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
     .main {{ background-color: #FFFFFF !important; }}
    
