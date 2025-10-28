@@ -32,7 +32,7 @@ except (KeyError, AttributeError):
  
 # ===============================
 # アバター画像取得 (キャッシュ)
-# 【画像が見つからない場合でもエラー表示はしないが、ログに出力する】
+# 【画像が見つからない場合、エラーメッセージを返す】
 # ===============================
 @st.cache_data
 def get_avatar_images():
@@ -40,58 +40,38 @@ def get_avatar_images():
     extensions = [".jpg", ".jpeg"]
     loaded_images = {}
     data_uri_prefix = ""
-    
-    found_close = False
-    found_open = False
- 
+    error_message = "" # エラーメッセージ格納用
+
     for key, base in base_names.items():
+        found = False
         for ext in extensions:
             file_name = base + ext
             try:
+                # ユーザーがファイルをアップロードしていることを確認するため、OSレベルの存在チェック
                 if os.path.exists(file_name):
                     with open(file_name, "rb") as f:
                         loaded_images[key] = base64.b64encode(f.read()).decode("utf-8")
                         # 最初にロードできた拡張子でmimeTypeを設定
                         if not data_uri_prefix:
                             data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
-                        
-                        if key == "close": found_close = True
-                        if key == "open": found_open = True
+                        found = True
                         break # 拡張子が見つかったら次へ
-            except FileNotFoundError:
-                continue
-    
-    # どちらかの画像が見つからなかった場合、コンソールにメッセージを出力
-    if not found_close:
-        print("DEBUG: 'yukki-close.jpg/jpeg' file not found.")
-    if not found_open:
-        print("DEBUG: 'yukki-open.jpg/jpeg' file not found.")
-
-    # 必須の2つの画像が見つからなかった場合、ダミーを設定
-    if not (found_close and found_open):
-        # 透明な1x1 GIFをダミーで設定 (ダミーデータとして最小限のBase64文字列)
-        dummy_base64 = "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
-        
-        # どちらか、または両方がない場合
-        if not found_close:
-            loaded_images["close"] = dummy_base64
-            # close画像がない場合、open画像もダミーにするか、close画像と同じにする
-            if not found_open:
-                 loaded_images["open"] = dummy_base64
+            except Exception as e:
+                # ファイルの読み込み自体でエラー（パーミッションなど）が発生した場合
+                error_message += f"Error loading {file_name}: {e}\n"
+                found = False
+                
+        if not found:
+            # 見つからなかったファイル名を出力
+            error_message += f"'{base}.(jpg/jpeg)'が見つかりませんでした。ファイル名を確認してください。\n"
             
-        if not found_open:
-            loaded_images["open"] = loaded_images.get("close", dummy_base64)
-
-        # ダミー画像の場合、prefixもgifに設定
-        if not data_uri_prefix:
-             data_uri_prefix = "data:image/gif;base64,"
-
-        # 画像が揃っていないが、ダミーで代替するため True を返す
-        # ダミー画像同士で口パクは機能しないが、口パクJSの実行は許可する
-        return loaded_images["close"], loaded_images["open"], data_uri_prefix, False
+    # close画像とopen画像の両方が揃っているかチェック
+    if "close" not in loaded_images or "open" not in loaded_images:
+        # 両方揃っていない場合、口パクを無効にする
+        return None, None, None, error_message, False
     
-    # 全て揃っている場合
-    return loaded_images["close"], loaded_images["open"], data_uri_prefix, True
+    # 全て揃っていてエラーがない場合
+    return loaded_images["close"], loaded_images["open"], data_uri_prefix, None, True
  
 # ===============================
 # 音声データ生成とSession State保存（リトライロジック含む）
@@ -100,6 +80,7 @@ def generate_and_store_tts(text):
     """Gemini TTSで音声生成し、base64データをst.session_state.audio_to_playに保存する"""
     if not API_KEY:
         st.session_state.audio_to_play = None
+        st.error("⚠️ APIキーが設定されていません。音声生成はスキップされました。")
         return
         
     payload = {
@@ -119,20 +100,23 @@ def generate_and_store_tts(text):
             response.raise_for_status()
             result = response.json()
  
+            # 結果から音声データを取り出す
             audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-            # 音声データをst.session_stateに保存
             st.session_state.audio_to_play = audio_data
             return
  
         except requests.exceptions.HTTPError as e:
             if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
+                print(f"TTS API Rate Limit/Service Unavailable. Retrying in {2 ** attempt}s...")
                 time.sleep(2 ** attempt)
                 continue
             # 最終試行または他のエラー
-            print(f"API Error (HTTP {response.status_code}) or final attempt failed: {e}")
+            print(f"TTS API Error (HTTP {response.status_code}) or final attempt failed: {e}")
+            st.error(f"TTS音声生成に失敗しました: HTTP {response.status_code}")
             break
         except Exception as e:
-            print(f"Error generating TTS: {e}")
+            print(f"Error generating TTS (Non-HTTP): {e}")
+            st.error(f"TTS音声生成に失敗しました: {e}")
             break
             
     st.session_state.audio_to_play = None
@@ -170,6 +154,7 @@ header {{ visibility: hidden; }}
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
+    overflow-y: auto; /* エラーメッセージ表示のためスクロールを許可 */
 }}
 
 /* サイドバーの開閉ボタン（<<マーク）を非表示にする */
@@ -207,30 +192,31 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     # 画像のデータURIを取得
-    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+    img_close_base64, img_open_base64, data_uri_prefix, error_msg, has_images = get_avatar_images()
+    
+    # 画像が揃っていない場合、エラーメッセージを表示
+    if not has_images and error_msg:
+        st.error(f"🚨画像ロードエラー:\n{error_msg}")
+        
+    # 画像表示のための初期設定
+    display_img_base64 = img_close_base64 if has_images else "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" # 透明GIF
+    display_data_uri_prefix = data_uri_prefix if data_uri_prefix else "data:image/gif;base64,"
     
     # 画像の表示と口パク制御JS関数の埋め込み
-    
-    # has_images が False の場合、口パクJS内の imagesLoaded は 'false' になるが、
-    # JS自体は実行させることで、画像が揃っている環境では問題なく口パクが機能する
-    
-    # 画像が見つからない場合、img_close_base64/img_open_base64はダミーBase64が入っている
-    # data_uri_prefixもgifのものが設定されている
-
     st.markdown(f"""
-    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+    <img id="avatar" src="{display_data_uri_prefix}{display_img_base64}" class="avatar">
     
     <script>
     // 口パク制御用のJavaScript
-    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}"; // openもcloseと同じデータURIか、本物のopen画像データURIが入る
-    const imagesLoaded = {'true' if has_images else 'false'}; // 画像が2枚あるかどうかのフラグ
+    const imagesAvailable = {'true' if has_images else 'false'};
+    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}" || "{display_data_uri_prefix}{display_img_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}" || "{display_data_uri_prefix}{display_img_base64}";
     let talkingInterval = null;
     
     // 口パクを開始する関数
     window.startTalking = function() {{
-        // 画像がロードされている、またはオープン画像とクローズ画像が異なる場合のみ実行
-        if (imagesLoaded || imgCloseBase64 !== imgOpenBase64) {{
+        // 画像が揃っている場合のみ口パクを実行
+        if (imagesAvailable) {{
             const avatar = document.getElementById('avatar');
             if (!avatar) return;
 
@@ -238,8 +224,6 @@ with st.sidebar:
             if (talkingInterval) clearInterval(talkingInterval);
             // 160msごとに画像を切り替え
             talkingInterval = setInterval(() => {{
-                // 画像が揃っていない場合 (imagesLoaded=false)、close/openは同じダミーURIなので口パクはしないが、
-                // setInterval自体は動く。画像が揃っていれば、画像が切り替わる。
                 avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
             }}, 160); 
@@ -251,10 +235,11 @@ with st.sidebar:
         // インターバルを停止
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
-        // 常に口閉じ画像に戻す
-        if (avatar) {{
+        // 画像が揃っている場合のみ、口閉じ画像に戻す
+        if (imagesAvailable && avatar) {{
             avatar.src = imgCloseBase64;
         }}
+        // 揃っていない場合は何もしない（ダミー画像に切り替わらないように）
     }}
     </script>
     """, unsafe_allow_html=True)
@@ -306,6 +291,7 @@ if st.session_state.audio_to_play:
         
         // window.startTalkingが存在するか確認してから呼び出す
         if (window.startTalking) {{
+            console.log("Starting Lip Sync...");
             window.startTalking();
         }}
         
@@ -317,13 +303,14 @@ if st.session_state.audio_to_play:
         audio.autoplay = true;
  
         audio.onended = () => {{ 
+            console.log("Stopping Lip Sync...");
             // window.stopTalkingが存在するか確認してから呼び出す
             if (window.stopTalking) window.stopTalking(); 
             // URLを解放
             URL.revokeObjectURL(audioUrl);
         }};
         audio.play().catch(e => {{
-            console.error("Audio playback failed:", e);
+            console.error("Audio playback failed (check console for MIME type error):", e);
             // エラー時も口パク停止
             if (window.stopTalking) window.stopTalking();
             URL.revokeObjectURL(audioUrl);
