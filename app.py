@@ -195,7 +195,6 @@ section[data-testid="stSidebar"] {{
     max-width: {SIDEBAR_WIDTH} !important;
     background-color: #FFFFFF !important;
     height: 100vh;
-    padding-top: 20px;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     z-index: 1000;
     
@@ -204,32 +203,38 @@ section[data-testid="stSidebar"] {{
     left: 0;
     top: 0;
     display: block !important;
+    
+    /* ★修正点: サイドバー自体に左パディングを追加 */
+    padding-left: 1rem;
+    padding-top: 20px; /* 上パディングは維持 */
+    box-sizing: border-box; /* パディングを含めて幅を計算 */
 }}
 
 /* メインコンテンツのコンテナ（stApp）に左マージンを設定 */
 .stApp {{
     /* Streamlitのメインコンテンツのラッパー */
     margin-left: {SIDEBAR_WIDTH};
-    padding-left: 1rem;
+    padding-left: 1rem; /* メインコンテンツの左パディング */
     padding-right: 1rem;
     padding-top: 1rem;
 }}
 
-/* サイドバー内のアバターを中央に配置 */
+/* サイドバー内のアバターを中央に配置（若干上に配置） */
 [data-testid="stSidebarContent"] > div:first-child {{
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding-top: 50px;
+    justify-content: flex-start; 
+    padding-top: 50px; /* アバターより上のスペース */
 }}
 .avatar {{
-    max-width: 300px; /* 修正点: 90%から80%へ変更 */
+    max-width: 80%; 
     height: auto;
     border-radius: 16px;
     object-fit: cover;
     border: 5px solid #ff69b4;
     box-shadow: 0 4px 10px rgba(255,105,180,0.5);
+    margin: 0 auto; /* 中央揃えを確実にする */
 }}
 </style>
 """, unsafe_allow_html=True)
