@@ -72,7 +72,7 @@ def generate_and_store_tts(text):
     if not API_KEY:
         st.session_state.audio_to_play = None
         return
-       
+        
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -105,7 +105,7 @@ def generate_and_store_tts(text):
         except Exception as e:
             print(f"Error generating TTS: {e}")
             break
-           
+            
     st.session_state.audio_to_play = None
  
 # ===============================
@@ -167,7 +167,7 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-   
+    
     # 画像がなければ警告を表示
     if not has_images:
         st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
@@ -185,18 +185,18 @@ with st.sidebar:
     }}
     /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
     .main {{ background-color: #FFFFFF !important; }}
-   
+    
     /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-   
+    
     <script>
     // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
-   
+    
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
         if ({'true' if has_images else 'false'} && avatar) {{
@@ -208,7 +208,7 @@ with st.sidebar:
             }}, 160);
         }}
     }}
-   
+    
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
@@ -263,14 +263,14 @@ if st.session_state.audio_to_play:
         // --- 再生ロジック ---
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
-       
+        
         // 口パク開始
         if (window.startTalking) window.startTalking();
-       
+        
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
         const audioUrl = URL.createObjectURL(wavBlob);
-       
+        
         const audio = new Audio(audioUrl);
         audio.autoplay = true;
  
@@ -325,23 +325,23 @@ if (SpeechRecognition) {
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
-   
+    
     // グローバルな認識開始関数 (Streamlit側から呼び出される)
     window.parent.startRec = () => {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     };
-   
+    
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
         sendTextToStreamlit(text);
     };
-   
+    
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
-   
+    
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
@@ -363,7 +363,7 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("質問を入力してください..."):
     # 1. ユーザーメッセージを追加・表示
     st.session_state.messages.append({"role": "user", "content": prompt})
-   
+    
     # 2. アシスタントの応答を取得・表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
@@ -372,13 +372,13 @@ if prompt := st.chat_input("質問を入力してください..."):
                     # Gemini API呼び出し
                     response = st.session_state.chat.send_message(prompt)
                     text = response.text
-                   
+                    
                     # 応答テキストを表示
                     st.markdown(text)
-                   
+                    
                     # 3. 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
-                   
+                    
                     # 4. メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
  
@@ -388,7 +388,7 @@ if prompt := st.chat_input("質問を入力してください..."):
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-   
+    
     # Rerunを実行し、UIを更新
     st.rerun()
  
@@ -401,13 +401,17 @@ window.addEventListener('message', event => {
         if (chatInput) {
             chatInput.value = event.data.text;
             chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
-            chatInput.dispatchEvent(enterEvent);
+            
+            // ★修正点: keydownとkeyupの両方をシミュレートすることで、自動送信をより確実にします
+            // keydownイベントをシミュレート
+            const keyDownEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13, which: 13 });
+            chatInput.dispatchEvent(keyDownEvent);
+            
+            // keyupイベントをシミュレート
+            const keyUpEvent = new KeyboardEvent('keyup', { key: 'Enter', bubbles: true, keyCode: 13, which: 13 });
+            chatInput.dispatchEvent(keyUpEvent);
         }
     }
 });
 </script>
 """, height=0)
- 
- 
- 
