@@ -204,10 +204,24 @@ section[data-testid="stSidebar"] {{
     top: 0;
     display: block !important;
     
-    /* ★修正点: サイドバー自体に左パディングを追加 */
+    /* サイドバー自体に左パディングを追加 */
     padding-left: 1rem;
-    padding-top: 20px; /* 上パディングは維持 */
-    box-sizing: border-box; /* パディングを含めて幅を計算 */
+    padding-top: 20px; 
+    box-sizing: border-box; 
+}}
+
+/* Streamlit標準のサイドバーを閉じるボタン（＞）を非表示にする */
+button[data-testid="stSidebarCloseButton"] {{
+    display: none !important;
+}}
+
+/* Streamlit標準のサイドバーを開くボタン（＜）を非表示にする */
+div[data-testid="stDecoration"] + div > button[kind="secondary"] {{
+    display: none !important;
+}}
+/* 別パターンのセレクタ（念のため） */
+div[data-testid="stAppViewBlock"] > div > div > button {{
+    display: none !important;
 }}
 
 /* メインコンテンツのコンテナ（stApp）に左マージンを設定 */
@@ -412,4 +426,3 @@ window.addEventListener('message', event => {
 });
 </script>
 """, height=0)
-
