@@ -126,7 +126,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # --- 音声再生トリガー ---
-if st.session_state.audio_to_play:
+if st.session_state.get("audio_to_play"):
     st.sidebar.markdown(f"""
     <script>
     if (window.startTalking) window.startTalking();
@@ -152,6 +152,7 @@ for msg in st.session_state.messages:
 # --- 入力ウィジェット ---
 prompt = st.chat_input("質問を入力してください...")
 st.subheader("音声入力")
+# ★★★ 変更点：音声入力ウィジェットにkeyを設定 ★★★
 voice_prompt = components.html("""
 <div id="mic-container">
     <button onclick="startRec()">🎙 話す</button>
@@ -172,23 +173,26 @@ function startRec() {
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        // Streamlitに値を返す
         window.parent.Streamlit.setComponentValue(text);
     };
     recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
     recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
 }
 </script>
-""", height=130)
+""", height=130, key="voice_input")
 
 # --- 入力値の処理 ---
+# new_promptに処理すべき新しい入力を設定
 if prompt:
     st.session_state.new_prompt = prompt
-if voice_prompt:
+elif voice_prompt:
     st.session_state.new_prompt = voice_prompt
 
+# 新しい入力があれば処理を実行
 if st.session_state.new_prompt:
     final_prompt = st.session_state.new_prompt
+    
+    # 処理が終わったので、新しい入力のフラグをクリア
     st.session_state.new_prompt = None
 
     st.session_state.messages.append({"role": "user", "content": final_prompt})
@@ -203,4 +207,8 @@ if st.session_state.new_prompt:
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
+    # ★★★ 変更点：音声入力ウィジェットの値をリセット ★★★
+    if 'voice_input' in st.session_state:
+        st.session_state.voice_input = None
+
     st.rerun()
