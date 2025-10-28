@@ -109,32 +109,6 @@ def generate_and_store_tts(text):
 st.set_page_config(page_title="ユッキー", layout="wide")
 
 # --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
-st.markdown(f"""
-<style>
-/* Streamlitのヘッダー/トップバーを非表示にする（任意） */
-header {{ visibility: hidden; }}
-
-/* ★★★ レイアウト変更CSSの削除 ★★★
-.stApp に対する margin-left の設定を削除し、Streamlitのデフォルトレイアウトに依存させる。
-*/
-
-/* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
-[data-testid="stSidebarContent"] > div:first-child {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start; 
-}}
-.avatar {{ 
-    width: 400px; 
-    height: 400px;
-    border-radius: 16px;
-    object-fit: cover;
-    /* お客様が以前指定されたCSSを維持 */
-    margin: 0 auto; 
-}}
-</style>
-""", unsafe_allow_html=True)
 
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
