@@ -120,6 +120,7 @@ header {{ visibility: hidden; }}
  
 /* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
 [data-testid="stSidebarContent"] > div:first-child {{
+    width: 450px !important
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -163,7 +164,12 @@ with st.sidebar:
     st.markdown(f"""
     <style>
     /* ★★★ お客様が「完璧」と指定されたCSSを再度ここに配置 ★★★ */
-    section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
+    section[data-testid="stSidebar"] {{
+        width: {SIDEBAR_FIXED_WIDTH} !important;
+        min-width: {SIDEBAR_FIXED_WIDTH} !important;
+        max-width: {SIDEBAR_FIXED_WIDTH} !important;
+        background-color: #FFFFFF !important;
+    }}
     .main {{ background-color: #FFFFFF !important; }}
     .st-emotion-cache-1y4p8pa {{
         display: flex;
