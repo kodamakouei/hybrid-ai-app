@@ -109,7 +109,7 @@ if "audio_to_play" not in st.session_state:
 
 # --- サイドバーに動画アバターを配置 ---
 with st.sidebar:
-    video_file = "yukki-lipsync.mp4"  # 口パク動画ファイル名
+    video_file = "yukki-.mp4"  # 口パク動画ファイル名
     if os.path.exists(video_file):
         with open(video_file, "rb") as f:
             video_base64 = base64.b64encode(f.read()).decode("utf-8")
