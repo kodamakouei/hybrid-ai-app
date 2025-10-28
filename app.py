@@ -23,6 +23,14 @@ try:
 except Exception:
     API_KEY = ""
 
+# -----------------------------------------------------
+# --- 共通設定 ---
+# -----------------------------------------------------
+TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+TTS_MODEL = "gemini-2.5-flash-preview-tts"
+TTS_VOICE = "Kore"
+MAX_RETRIES = 5
+
 # ===============================
 # アバター画像取得 (キャッシュ)
 # ===============================
@@ -53,30 +61,7 @@ def get_avatar_images():
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
-# ===============================
-# 音声データを生成し、Session Stateに保存する関数
-# ===============================
-def generate_and_store_tts(text):
-    if not API_KEY:
-        return
-    payload = {
-        "contents": [{"parts": [{"text": text}]}],
-        "generationConfig": {"responseModalities": ["AUDIO"]},
-        "model": TTS_MODEL
-    }
-    headers = {'Content-Type': 'application/json'}
-    try:
-        response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        result = response.json()
-        st.session_state.audio_to_play = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-    except Exception as e:
-        st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
 
-# ===============================
-# Streamlit UI
-# ===============================
-st.set_page_config(page_title="ユッキー", layout="wide")
 
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
@@ -122,21 +107,170 @@ with st.sidebar:
     </script>
     """, unsafe_allow_html=True)
 
-# --- 音声再生トリガー ---
-if st.session_state.audio_to_play:
-    st.sidebar.markdown(f"""
+# -----------------------------------------------------
+# --- 音声を自動再生するための関数 ---
+# -----------------------------------------------------
+@st.cache_data
+def base64_to_audio_url(base64_data, sample_rate):
+    js_code = f"""
     <script>
-    if (window.startTalking) window.startTalking();
-    const audio = new Audio('data:audio/wav;base64,{st.session_state.audio_to_play}');
-    audio.autoplay = true;
-    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-    audio.play().catch(e => {{
-        console.error("Audio playback failed:", e);
-        if (window.stopTalking) window.stopTalking();
-    }});
+        function base64ToArrayBuffer(base64) {{
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {{
+                bytes[i] = binary_string.charCodeAt(i);
+            }}
+            return bytes.buffer;
+        }}
+ 
+        function pcmToWav(pcmData, sampleRate) {{
+            const numChannels = 1;
+            const bitsPerSample = 16;
+            const bytesPerSample = bitsPerSample / 8;
+            const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = pcmData.byteLength;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+            let offset = 0;
+ 
+            writeString(view, offset, 'RIFF'); offset += 4;
+            view.setUint32(offset, 36 + dataSize, true); offset += 4;
+            writeString(view, offset, 'WAVE'); offset += 4;
+            writeString(view, offset, 'fmt '); offset += 4;
+            view.setUint32(offset, 16, true); offset += 4;
+            view.setUint16(offset, 1, true); offset += 2;
+            view.setUint16(offset, numChannels, true); offset += 2;
+            view.setUint32(offset, sampleRate, true); offset += 4;
+            view.setUint32(offset, byteRate, true); offset += 4;
+            view.setUint16(offset, blockAlign, true); offset += 2;
+            view.setUint16(offset, bitsPerSample, true); offset += 2;
+            writeString(view, offset, 'data'); offset += 4;
+            view.setUint32(offset, dataSize, true); offset += 4;
+ 
+            const pcm16 = new Int16Array(pcmData);
+            for (let i = 0; i < pcm16.length; i++) {{
+                view.setInt16(offset, pcm16[i], true);
+                offset += 2;
+            }}
+            return new Blob([buffer], {{ type: 'audio/wav' }});
+        }}
+ 
+        function writeString(view, offset, string) {{
+            for (let i = 0; i < string.length; i++) {{
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }}
+        }}
+ 
+        const pcmData = base64ToArrayBuffer('{base64_data}');
+        const wavBlob = pcmToWav(pcmData, {sample_rate});
+        const audioUrl = URL.createObjectURL(wavBlob);
+        const audio = new Audio(audioUrl);
+        audio.play().catch(e => console.log("Audio autoplay failed:", e));
     </script>
-    """, unsafe_allow_html=True)
-    st.session_state.audio_to_play = None
+    """
+    components.html(js_code, height=0, width=0)
+ 
+ 
+def generate_and_play_tts(text):
+    """Gemini TTSで音声生成＋自動再生"""
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}},
+        },
+        "model": TTS_MODEL,
+    }
+ 
+    headers = {'Content-Type': 'application/json'}
+ 
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+            response.raise_for_status()
+            result = response.json()
+            candidate = result.get('candidates', [{}])[0]
+            part = candidate.get('content', {}).get('parts', [{}])[0]
+            audio_data = part.get('inlineData', {})
+            if audio_data and audio_data.get('data'):
+                mime_type = audio_data.get('mimeType', 'audio/L16;rate=24000')
+                try:
+                    sample_rate = int(mime_type.split('rate=')[1])
+                except IndexError:
+                    sample_rate = 24000
+                base64_to_audio_url(audio_data['data'], sample_rate)
+                return True
+            st.error("音声データを取得できませんでした。")
+            return False
+        except requests.exceptions.HTTPError as e:
+            if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            st.error(f"APIエラー: {e}")
+            return False
+        except Exception as e:
+            st.error(f"予期せぬエラー: {e}")
+            return False
+    return False
+ 
+ 
+# -----------------------------------------------------
+# --- 音声入力UI（Web Speech API） ---
+# -----------------------------------------------------
+def speech_to_text_ui():
+    """
+    Web Speech APIによる音声入力ボタン。
+    """
+    st.markdown("### 🎙️ 音声で質問する")
+    html_code = """
+    <script>
+    let recognizing = false;
+    let recognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+ 
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+ 
+        function startRecognition() {
+            if (!recognizing) {
+                recognizing = true;
+                recognition.start();
+                document.getElementById('mic-status').innerText = '🎧 聴き取り中...';
+            } else {
+                recognizing = false;
+                recognition.stop();
+                document.getElementById('mic-status').innerText = 'マイク停止中';
+            }
+        }
+ 
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            const streamlitInput = window.parent.document.querySelector('input[data-testid="stChatInput"]');
+            if (streamlitInput) {
+                streamlitInput.value = transcript;
+                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+                streamlitInput.dispatchEvent(enterEvent);
+            }
+            document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
+        };
+ 
+        recognition.onerror = function(event) {
+            document.getElementById('mic-status').innerText = '⚠️ エラー: ' + event.error;
+        };
+    } else {
+        document.getElementById('mic-status').innerText = 'このブラウザは音声認識をサポートしていません。';
+    }
+    </script>
+ 
+    <button onclick="startRecognition()">🎤 話す / 停止</button>
+    <p id="mic-status">マイク停止中</p>
+    """
+    components.html(html_code, height=120)
 
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー")
@@ -174,7 +308,7 @@ if (SpeechRecognition) {
 # チャット履歴
 st.subheader("ユッキーとの会話履歴")
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
+    with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "yukki-icon.jpg"):
         st.markdown(msg["content"])
 
 # --- チャット入力と処理 ---
