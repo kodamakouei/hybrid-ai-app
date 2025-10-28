@@ -17,7 +17,7 @@ SYSTEM_PROMPT = """
 3️⃣ 途中式を見せられた場合は正誤を判定し、優しく導く。
 """
 # --- 共通設定 ---
-TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent%22
+TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
