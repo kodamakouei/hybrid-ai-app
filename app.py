@@ -26,8 +26,9 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
-# サイドバーの幅をこの値に合わせて調整 (画面幅の約1/4に設定)
-SIDEBAR_WIDTH = "25%"
+# ★修正点1: サイドバーの幅を20%に変更し、メインコンテンツとの比率を調整
+SIDEBAR_WIDTH = "20%" 
+MAIN_CONTENT_GAP = "2rem" # メインコンテンツとサイドバーの間に開ける隙間 (例: 2rem = 約32px)
 
 # --- APIキーの読み込み ---
 try:
@@ -204,9 +205,9 @@ section[data-testid="stSidebar"] {{
     top: 0;
     display: block !important;
     
-    /* ★修正点: サイドバー全体に左右のパディングを追加して、左端との間に余白を作る */
-    padding-left: 1.5rem !important; /* 左側にゆとりを持たせる */
-    padding-right: 1.5rem !important; /* 右側にもゆとりを持たせる */
+    /* サイドバーの内側の余白 */
+    padding-left: 1.5rem !important; 
+    padding-right: 1.5rem !important; 
     padding-top: 20px; 
     box-sizing: border-box; 
 }}
@@ -225,13 +226,18 @@ div[data-testid="stAppViewBlock"] > div > div > button {{
     display: none !important;
 }}
 
-/* メインコンテンツのコンテナ（stApp）に左マージンを設定 */
+/* ★修正点2: メインコンテンツのコンテナ（stApp）に左マージンを設定し、隙間を作る */
 .stApp {{
-    /* Streamlitのメインコンテンツのラッパー */
-    margin-left: {SIDEBAR_WIDTH};
-    padding-left: 1rem; /* メインコンテンツの左パディング */
+    /* サイドバーの幅 + 隙間の分だけマージンを空ける */
+    margin-left: calc({SIDEBAR_WIDTH} + {MAIN_CONTENT_GAP}); 
+    padding-left: 0; /* マージンで調整したのでパディングは不要 */
     padding-right: 1rem;
     padding-top: 1rem;
+}}
+/* ★追加: メインコンテンツのコンテンツ自体にも左パディングを追加して、チャットの開始位置を調整 */
+div.main {{
+    padding-left: {MAIN_CONTENT_GAP} !important;
+    padding-right: 1rem;
 }}
 
 /* サイドバー内のアバターを中央に配置（若干上に配置） */
