@@ -296,9 +296,14 @@ if st.session_state.audio_to_play:
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
- 
 # 音声認識ボタンとチャット履歴の表示
 st.subheader("音声入力")
+
+# ⚠️ 修正点1: 音声認識結果を保持するための非表示のテキスト入力欄を用意
+# これが音声認識のJSからの入力を受け取ります
+st_speech_input = st.text_input("音声認識結果", key="speech_to_text", label_visibility="collapsed")
+st.markdown("<style>div[data-testid='stTextInput'] { display: none; }</style>", unsafe_allow_html=True)
+
 # StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
 components.html("""
 <div id="mic-container" style="padding: 10px 0;">
@@ -309,105 +314,110 @@ components.html("""
     <p id="mic-status" style="margin-top: 10px;">マイク停止中</p>
 </div>
 <script>
-// Streamlitのチャット入力欄にテキストを送信する関数
-function sendTextToStreamlit(text) {
-    window.parent.postMessage({
-        type: 'SET_CHAT_INPUT',
-        text: text
-    }, '*');
+// Streamlitの非表示のテキスト入力欄にテキストを送信する関数 (親ウィンドウのDOMを操作)
+function setStreamlitTextInput(text) {
+    // aria-label属性を使って、非表示のst.text_inputのDOMを探す
+    const inputElement = window.parent.document.querySelector('input[aria-label="音声認識結果"]');
+    if (inputElement) {
+        inputElement.value = text;
+        // 値を設定しただけではStreamlitに認識されないので、input/changeイベントを発火させる
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        inputElement.dispatchEvent(new Event('change', { bubbles: true })); // これでStreamlitに値が伝達される
+    }
 }
- 
+
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
- 
+
 if (SpeechRecognition) {
+    // ... (既存のJSロジックは変更なし) ...
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
-   
-    // グローバルな認識開始関数 (Streamlit側から呼び出される)
+    
     window.parent.startRec = () => {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     };
-   
+    
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
-        sendTextToStreamlit(text);
+        setStreamlitTextInput(text); // ⚠️ 修正点2: 非表示の入力欄に転送
     };
-   
+    
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
-   
+    
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
         }
     };
+
 } else {
     document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
 }
 </script>
 """, height=130)
- 
+
 st.subheader("ユッキーとの会話履歴")
 for msg in st.session_state.messages:
     avatar_icon = "🧑" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar_icon):
         st.markdown(msg["content"])
- 
+
+# ⚠️ 修正点3: st.text_inputからの入力を chat_input の前に処理
+# st.session_state.speech_to_text に値があれば、それを prompt として設定し、チャット処理をトリガー
+prompt_to_process = None
+if st.session_state.speech_to_text and st.session_state.speech_to_text != "":
+    prompt_to_process = st.session_state.speech_to_text
+    # 一度処理したら値をクリアし、再実行時の無限ループを防ぐ
+    st.session_state.speech_to_text = ""
+    # st.rerun() を呼ぶことで、画面更新とチャット処理を続行
+    st.rerun()
+
 # --- チャット入力と処理 ---
-if prompt := st.chat_input("質問を入力してください..."):
+# ⚠️ 修正点4: st.chat_inputからの入力、または音声入力からの転送値を使用
+if prompt := st.chat_input("質問を入力してください...") or prompt_to_process:
     # 1. ユーザーメッセージを追加・表示
-    st.session_state.messages.append({"role": "user", "content": prompt})
-   
+    # prompt_to_process があればそちらを使用、なければ st.chat_input の値を使用
+    final_prompt = prompt_to_process if prompt_to_process else prompt
+
+    st.session_state.messages.append({"role": "user", "content": final_prompt})
+    
     # 2. アシスタントの応答を取得・表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
             if st.session_state.chat:
                 try:
                     # Gemini API呼び出し
-                    response = st.session_state.chat.send_message(prompt)
+                    response = st.session_state.chat.send_message(final_prompt) # final_prompt を渡す
                     text = response.text
-                   
+                    
                     # 応答テキストを表示
                     st.markdown(text)
-                   
+                    
                     # 3. 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
-                   
+                    
                     # 4. メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
- 
+
                 except Exception as e:
                     error_msg = f"APIエラーが発生しました: {e}"
                     st.error(error_msg)
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-   
+    
     # Rerunを実行し、UIを更新
     st.rerun()
- 
+
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
-components.html("""
-<script>
-window.addEventListener('message', event => {
-    if (event.data.type === 'SET_CHAT_INPUT') {
-        const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-        if (chatInput) {
-            chatInput.value = event.data.text;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
-            chatInput.dispatchEvent(enterEvent);
-        }
-    }
-});
-</script>
-""", height=0)
- 
- 
- 
+# ⚠️ 修正点5: 既存のチャット入力欄への転送JSは非表示のst.text_inputを使うロジックに変更したため削除またはコメントアウト。
+# 元々あったコード（postMessageを受け取るロジック）
+# components.html(""" ... """, height=0) 
+# は不要になりました。
