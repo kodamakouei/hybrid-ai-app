@@ -67,9 +67,28 @@ def get_avatar_images():
     if not found_open:
         print("DEBUG: 'yukki-open.jpg/jpeg' file not found.")
 
-    # 必須の2つの画像が見つからなかった場合、Noneを返す
+    # 必須の2つの画像が見つからなかった場合、ダミーを設定
     if not (found_close and found_open):
-        return None, None, None, False
+        # 透明な1x1 GIFをダミーで設定 (ダミーデータとして最小限のBase64文字列)
+        dummy_base64 = "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+        
+        # どちらか、または両方がない場合
+        if not found_close:
+            loaded_images["close"] = dummy_base64
+            # close画像がない場合、open画像もダミーにするか、close画像と同じにする
+            if not found_open:
+                 loaded_images["open"] = dummy_base64
+            
+        if not found_open:
+            loaded_images["open"] = loaded_images.get("close", dummy_base64)
+
+        # ダミー画像の場合、prefixもgifに設定
+        if not data_uri_prefix:
+             data_uri_prefix = "data:image/gif;base64,"
+
+        # 画像が揃っていないが、ダミーで代替するため True を返す
+        # ダミー画像同士で口パクは機能しないが、口パクJSの実行は許可する
+        return loaded_images["close"], loaded_images["open"], data_uri_prefix, False
     
     # 全て揃っている場合
     return loaded_images["close"], loaded_images["open"], data_uri_prefix, True
@@ -191,16 +210,12 @@ with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
     
     # 画像の表示と口パク制御JS関数の埋め込み
-    # 画像が見つからない場合、img_close_base64/img_open_base64はNoneになるため、
-    # HTML生成前に空の画像データを指定してエラー回避
     
-    # has_images が False の場合、口パクJSは無効にする（コードは残すが実行しない）
-    if not has_images:
-        # 画像が見つからない場合、透明な1x1 GIFをダミーで設定（表示されないように）
-        # ただし、CSSでサイズ指定されているため、黒い枠線のみ表示される
-        dummy_base64 = "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
-        img_close_base64 = dummy_base64
-        data_uri_prefix = "data:image/gif;base64,"
+    # has_images が False の場合、口パクJS内の imagesLoaded は 'false' になるが、
+    # JS自体は実行させることで、画像が揃っている環境では問題なく口パクが機能する
+    
+    # 画像が見つからない場合、img_close_base64/img_open_base64はダミーBase64が入っている
+    # data_uri_prefixもgifのものが設定されている
 
     st.markdown(f"""
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
@@ -208,14 +223,14 @@ with st.sidebar:
     <script>
     // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64 if img_open_base64 else img_close_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}"; // openもcloseと同じデータURIか、本物のopen画像データURIが入る
     const imagesLoaded = {'true' if has_images else 'false'}; // 画像が2枚あるかどうかのフラグ
     let talkingInterval = null;
     
     // 口パクを開始する関数
     window.startTalking = function() {{
-        // 画像がロードされている場合のみ実行
-        if (imagesLoaded) {{
+        // 画像がロードされている、またはオープン画像とクローズ画像が異なる場合のみ実行
+        if (imagesLoaded || imgCloseBase64 !== imgOpenBase64) {{
             const avatar = document.getElementById('avatar');
             if (!avatar) return;
 
@@ -223,6 +238,8 @@ with st.sidebar:
             if (talkingInterval) clearInterval(talkingInterval);
             // 160msごとに画像を切り替え
             talkingInterval = setInterval(() => {{
+                // 画像が揃っていない場合 (imagesLoaded=false)、close/openは同じダミーURIなので口パクはしないが、
+                // setInterval自体は動く。画像が揃っていれば、画像が切り替わる。
                 avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
             }}, 160); 
@@ -235,7 +252,7 @@ with st.sidebar:
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
         // 常に口閉じ画像に戻す
-        if (imagesLoaded && avatar) {{
+        if (avatar) {{
             avatar.src = imgCloseBase64;
         }}
     }}
