@@ -86,6 +86,8 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "audio_to_play" not in st.session_state:
+    st.session_state.audio_to_play = None
 
 
 
@@ -147,7 +149,7 @@ if st.session_state.audio_to_play:
     </script>
     """, unsafe_allow_html=True)
     st.session_state.audio_to_play = None
-    
+
 # -----------------------------------------------------
 # --- 音声を自動再生するための関数 ---
 # -----------------------------------------------------
