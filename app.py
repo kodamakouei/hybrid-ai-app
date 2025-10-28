@@ -17,7 +17,7 @@ SYSTEM_PROMPT = """
 3️⃣ 途中式を見せられた場合は正誤を判定し、優しく導く。
 """
 # --- 共通設定 ---
-TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent%22
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
@@ -32,46 +32,37 @@ except (KeyError, AttributeError):
  
 # ===============================
 # アバター画像取得 (キャッシュ)
-# 【画像が見つからない場合、エラーメッセージを返す】
 # ===============================
 @st.cache_data
 def get_avatar_images():
-    base_names = {"close": "yukki-close", "open": "yukki-open"}
+    base_names = ["yukki-close", "yukki-open"]
     extensions = [".jpg", ".jpeg"]
     loaded_images = {}
     data_uri_prefix = ""
-    error_message = "" # エラーメッセージ格納用
-
-    for key, base in base_names.items():
-        found = False
+ 
+    for base in base_names:
         for ext in extensions:
             file_name = base + ext
             try:
-                # ユーザーがファイルをアップロードしていることを確認するため、OSレベルの存在チェック
+                # ユーザーがアップロードしたファイルをチェック
                 if os.path.exists(file_name):
                     with open(file_name, "rb") as f:
-                        loaded_images[key] = base64.b64encode(f.read()).decode("utf-8")
-                        # 最初にロードできた拡張子でmimeTypeを設定
-                        if not data_uri_prefix:
-                            data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
-                        found = True
-                        break # 拡張子が見つかったら次へ
-            except Exception as e:
-                # ファイルの読み込み自体でエラー（パーミッションなど）が発生した場合
-                error_message += f"Error loading {file_name}: {e}\n"
-                found = False
-                
-        if not found:
-            # 見つからなかったファイル名を出力
-            error_message += f"'{base}.(jpg/jpeg)'が見つかりませんでした。ファイル名を確認してください。\n"
-            
-    # close画像とopen画像の両方が揃っているかチェック
-    if "close" not in loaded_images or "open" not in loaded_images:
-        # 両方揃っていない場合、口パクを無効にする
-        return None, None, None, error_message, False
-    
-    # 全て揃っていてエラーがない場合
-    return loaded_images["close"], loaded_images["open"], data_uri_prefix, None, True
+                        loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
+                        data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
+                        break
+                # Streamlitのメディアファイルとしてもチェック（ただしローカル実行の場合は上記で十分）
+                # ここではローカルファイルを優先
+            except FileNotFoundError:
+                continue
+ 
+    if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
+        return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
+    else:
+        # アバターがない場合のプレースホルダーSVG
+        placeholder_svg = base64.b64encode(
+            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
+        ).decode("utf-8")
+        return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
  
 # ===============================
 # 音声データ生成とSession State保存（リトライロジック含む）
@@ -80,9 +71,8 @@ def generate_and_store_tts(text):
     """Gemini TTSで音声生成し、base64データをst.session_state.audio_to_playに保存する"""
     if not API_KEY:
         st.session_state.audio_to_play = None
-        st.error("⚠️ APIキーが設定されていません。音声生成はスキップされました。")
         return
-        
+       
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -100,25 +90,22 @@ def generate_and_store_tts(text):
             response.raise_for_status()
             result = response.json()
  
-            # 結果から音声データを取り出す
             audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+            # 音声データをst.session_stateに保存
             st.session_state.audio_to_play = audio_data
             return
  
         except requests.exceptions.HTTPError as e:
             if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
-                print(f"TTS API Rate Limit/Service Unavailable. Retrying in {2 ** attempt}s...")
                 time.sleep(2 ** attempt)
                 continue
             # 最終試行または他のエラー
-            print(f"TTS API Error (HTTP {response.status_code}) or final attempt failed: {e}")
-            st.error(f"TTS音声生成に失敗しました: HTTP {response.status_code}")
+            print(f"API Error (HTTP {response.status_code}) or final attempt failed: {e}")
             break
         except Exception as e:
-            print(f"Error generating TTS (Non-HTTP): {e}")
-            st.error(f"TTS音声生成に失敗しました: {e}")
+            print(f"Error generating TTS: {e}")
             break
-            
+           
     st.session_state.audio_to_play = None
  
 # ===============================
@@ -126,15 +113,15 @@ def generate_and_store_tts(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
  
-# --- グローバルCSSの適用 ---
+# --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
 st.markdown(f"""
 <style>
 /* Streamlitのヘッダー/トップバーを非表示にする（任意） */
 header {{ visibility: hidden; }}
  
-/* stSidebarContent直下の要素のwidthを修正 */
+/* ★修正点1: stSidebarContent直下の要素のwidthにセミコロンを追加し、CSS構文エラーを修正 */
 [data-testid="stSidebarContent"] > div:first-child {{
-    width: {SIDEBAR_FIXED_WIDTH} !important;
+    width: {SIDEBAR_FIXED_WIDTH} !important; /* セミコロンを追加 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -146,31 +133,18 @@ header {{ visibility: hidden; }}
     border-radius: 16px;
     object-fit: cover;
     margin: 0 auto;
-    border: 3px solid #ff69b4; 
-    box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
 }}
-/* stSidebarContentにも幅を適用し、確実に固定 */
+/* ★修正点2: stSidebarContentにも幅を適用し、確実に固定 */
 [data-testid="stSidebarContent"] {{
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    overflow-y: auto; /* エラーメッセージ表示のためスクロールを許可 */
 }}
-
-/* サイドバーの開閉ボタン（<<マーク）を非表示にする */
+ 
+/* --- 追加: サイドバーの開閉ボタン（<<マーク）を非表示にする --- */
 [data-testid="stSidebarCollapseButton"] {{
     display: none !important;
 }}
-
-/* サイドバーの横スクロールバーを非表示にする */
-section[data-testid="stSidebar"] {{
-    overflow-x: hidden !important;
-    width: {SIDEBAR_FIXED_WIDTH} !important; 
-    min-width: {SIDEBAR_FIXED_WIDTH} !important;
-    max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    background-color: #f8e7ff !important; 
-}}
-
 </style>
 """, unsafe_allow_html=True)
  
@@ -181,6 +155,7 @@ if "client" not in st.session_state:
 if "chat" not in st.session_state:
     if st.session_state.client:
         config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        # Chat Sessionを初期化する際に、configを渡す
         st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
     else:
         st.session_state.chat = None
@@ -191,55 +166,55 @@ if "audio_to_play" not in st.session_state:
  
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
-    # 画像のデータURIを取得
-    img_close_base64, img_open_base64, data_uri_prefix, error_msg, has_images = get_avatar_images()
-    
-    # 画像が揃っていない場合、エラーメッセージを表示
-    if not has_images and error_msg:
-        st.error(f"🚨画像ロードエラー:\n{error_msg}")
-        
-    # 画像表示のための初期設定
-    display_img_base64 = img_close_base64 if has_images else "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" # 透明GIF
-    display_data_uri_prefix = data_uri_prefix if data_uri_prefix else "data:image/gif;base64,"
-    
-    # 画像の表示と口パク制御JS関数の埋め込み
+    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+   
+    # 画像がなければ警告を表示
+    if not has_images:
+        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
+ 
+    # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
-    <img id="avatar" src="{display_data_uri_prefix}{display_img_base64}" class="avatar">
-    
+    <style>
+    /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
+    /* サイドバーコンテナ自体を固定 */
+    section[data-testid="stSidebar"] {{
+        width: {SIDEBAR_FIXED_WIDTH} !important;
+        min-width: {SIDEBAR_FIXED_WIDTH} !important;
+        max-width: {SIDEBAR_FIXED_WIDTH} !important;
+        background-color: #FFFFFF !important;
+    }}
+    /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
+    .main {{ background-color: #FFFFFF !important; }}
+   
+    /* アバターコンポーネントのスタイル */
+    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
+    </style>
+    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+   
     <script>
     // 口パク制御用のJavaScript
-    const imagesAvailable = {'true' if has_images else 'false'};
-    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}" || "{display_data_uri_prefix}{display_img_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}" || "{display_data_uri_prefix}{display_img_base64}";
+    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
-    
-    // 口パクを開始する関数
+   
     window.startTalking = function() {{
-        // 画像が揃っている場合のみ口パクを実行
-        if (imagesAvailable) {{
-            const avatar = document.getElementById('avatar');
-            if (!avatar) return;
-
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'} && avatar) {{
             let toggle = false;
             if (talkingInterval) clearInterval(talkingInterval);
-            // 160msごとに画像を切り替え
             talkingInterval = setInterval(() => {{
                 avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
-            }}, 160); 
+            }}, 160);
         }}
     }}
-    
-    // 口パクを停止する関数
+   
     window.stopTalking = function() {{
-        // インターバルを停止
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
-        // 画像が揃っている場合のみ、口閉じ画像に戻す
-        if (imagesAvailable && avatar) {{
+        if ({'true' if has_images else 'false'} && avatar) {{
             avatar.src = imgCloseBase64;
         }}
-        // 揃っていない場合は何もしない（ダミー画像に切り替わらないように）
     }}
     </script>
     """, unsafe_allow_html=True)
@@ -288,30 +263,26 @@ if st.session_state.audio_to_play:
         // --- 再生ロジック ---
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
-        
-        // window.startTalkingが存在するか確認してから呼び出す
-        if (window.startTalking) {{
-            console.log("Starting Lip Sync...");
-            window.startTalking();
-        }}
-        
+       
+        // 口パク開始
+        if (window.startTalking) window.startTalking();
+       
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
         const audioUrl = URL.createObjectURL(wavBlob);
-        
+       
         const audio = new Audio(audioUrl);
         audio.autoplay = true;
  
-        audio.onended = () => {{ 
-            console.log("Stopping Lip Sync...");
-            // window.stopTalkingが存在するか確認してから呼び出す
-            if (window.stopTalking) window.stopTalking(); 
+        audio.onended = () => {{
+            // 口パク終了
+            if (window.stopTalking) window.stopTalking();
             // URLを解放
             URL.revokeObjectURL(audioUrl);
         }};
         audio.play().catch(e => {{
-            console.error("Audio playback failed (check console for MIME type error):", e);
-            // エラー時も口パク停止
+            console.error("Audio playback failed:", e);
+            // エラー時も口パク終了
             if (window.stopTalking) window.stopTalking();
             URL.revokeObjectURL(audioUrl);
         }});
@@ -354,23 +325,23 @@ if (SpeechRecognition) {
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
-    
+   
     // グローバルな認識開始関数 (Streamlit側から呼び出される)
     window.parent.startRec = () => {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     };
-    
+   
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
         sendTextToStreamlit(text);
     };
-    
+   
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
-    
+   
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
@@ -392,7 +363,7 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("質問を入力してください..."):
     # 1. ユーザーメッセージを追加・表示
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
+   
     # 2. アシスタントの応答を取得・表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
@@ -401,13 +372,13 @@ if prompt := st.chat_input("質問を入力してください..."):
                     # Gemini API呼び出し
                     response = st.session_state.chat.send_message(prompt)
                     text = response.text
-                    
+                   
                     # 応答テキストを表示
                     st.markdown(text)
-                    
+                   
                     # 3. 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
-                    
+                   
                     # 4. メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
  
@@ -417,7 +388,7 @@ if prompt := st.chat_input("質問を入力してください..."):
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
+   
     # Rerunを実行し、UIを更新
     st.rerun()
  
@@ -437,3 +408,5 @@ window.addEventListener('message', event => {
 });
 </script>
 """, height=0)
+ 
+ 
