@@ -341,7 +341,7 @@ if prompt := st.chat_input("質問を入力してください..."):
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-        generate_and_store_tts(text)  # ここを変更
+        generate_and_store_tts(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     st.rerun()
