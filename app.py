@@ -71,6 +71,7 @@ def generate_and_store_tts(text):
         result = response.json()
         st.session_state.audio_to_play = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except Exception as e:
+        # エラーはUIに表示するが、セッションステートには保存しない
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
 
 # ===============================
@@ -91,8 +92,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
-if "new_prompt" not in st.session_state:
-    st.session_state.new_prompt = None
 
 # --- サイドバー ---
 with st.sidebar:
@@ -144,6 +143,7 @@ if st.session_state.get("audio_to_play"):
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー")
 
+# ★★★ 変更点：UI表示を先に行う ★★★
 # チャット履歴の表示
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
@@ -152,7 +152,6 @@ for msg in st.session_state.messages:
 # --- 入力ウィジェット ---
 prompt = st.chat_input("質問を入力してください...")
 st.subheader("音声入力")
-# ★★★ 変更点：音声入力ウィジェットにkeyを設定 ★★★
 voice_prompt = components.html("""
 <div id="mic-container">
     <button onclick="startRec()">🎙 話す</button>
@@ -179,36 +178,36 @@ function startRec() {
     recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
 }
 </script>
-""", height=130, key="voice_input")
+""", height=130)
 
-# --- 入力値の処理 ---
-# new_promptに処理すべき新しい入力を設定
-if prompt:
-    st.session_state.new_prompt = prompt
-elif voice_prompt:
-    st.session_state.new_prompt = voice_prompt
+# ★★★ 変更点：入力処理を最後に行い、rerunを削除 ★★★
+final_prompt = prompt or voice_prompt
 
-# 新しい入力があれば処理を実行
-if st.session_state.new_prompt:
-    final_prompt = st.session_state.new_prompt
-    
-    # 処理が終わったので、新しい入力のフラグをクリア
-    st.session_state.new_prompt = None
-
+if final_prompt:
     st.session_state.messages.append({"role": "user", "content": final_prompt})
+    
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(final_prompt)
+
     if st.session_state.chat:
         try:
             response = st.session_state.chat.send_message(final_prompt)
             text = response.text
             st.session_state.messages.append({"role": "assistant", "content": text})
             generate_and_store_tts(text)
-        except Exception as e:
-            st.session_state.messages.append({"role": "assistant", "content": f"❌ エラーが発生しました: {e}"})
-    else:
-        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
-    # ★★★ 変更点：音声入力ウィジェットの値をリセット ★★★
-    if 'voice_input' in st.session_state:
-        st.session_state.voice_input = None
+            
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(text)
 
-    st.rerun()
+        except Exception as e:
+            error_message = f"❌ エラーが発生しました: {e}"
+            st.session_state.messages.append({"role": "assistant", "content": error_message})
+            with st.chat_message("assistant", avatar="🤖"):
+                st.markdown(error_message)
+    else:
+        error_message = "APIキーが設定されていないため、お答えできません。"
+        st.session_state.messages.append({"role": "assistant", "content": error_message})
+        with st.chat_message("assistant", avatar="🤖"):
+            st.markdown(error_message)
+    
+    # st.rerun() を削除
