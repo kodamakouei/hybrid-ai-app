@@ -167,18 +167,36 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-
+   
+    # 画像がなければ警告を表示
+    if not has_images:
+        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
+ 
+    # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
     <style>
-    section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
+    /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
+    /* サイドバーコンテナ自体を固定 */
+    section[data-testid="stSidebar"] {{
+        width: {SIDEBAR_FIXED_WIDTH} !important;
+        min-width: {SIDEBAR_FIXED_WIDTH} !important;
+        max-width: {SIDEBAR_FIXED_WIDTH} !important;
+        background-color: #FFFFFF !important;
+    }}
+    /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
     .main {{ background-color: #FFFFFF !important; }}
+   
+    /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+   
     <script>
+    // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
+   
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
         if ({'true' if has_images else 'false'} && avatar) {{
@@ -190,6 +208,7 @@ with st.sidebar:
             }}, 160);
         }}
     }}
+   
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
@@ -199,36 +218,29 @@ with st.sidebar:
     }}
     </script>
     """, unsafe_allow_html=True)
-
-    # 音声再生＆口パク（PCM→WAV変換付き）
-    if st.session_state.audio_to_play:
-        js_code = f"""
-        <script>
-        // PCM base64 → WAV Blob
+ 
+# --- 音声再生トリガーをサイドバーに追加（口パク制御とWAV変換ロジックを統合） ---
+if st.session_state.audio_to_play:
+    # WAV変換ヘルパー関数を定義したJavaScriptコードを挿入
+    js_code = f"""
+    <script>
+        // --- PCM to WAV Utility Functions ---
         function base64ToArrayBuffer(base64) {{
             const binary_string = window.atob(base64);
             const len = binary_string.length;
             const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {{
-                bytes[i] = binary_string.charCodeAt(i);
-            }}
+            for (let i = 0; i < len; i++) {{ bytes[i] = binary_string.charCodeAt(i); }}
             return bytes.buffer;
         }}
         function writeString(view, offset, string) {{
-            for (let i = 0; i < string.length; i++) {{
-                view.setUint8(offset + i, string.charCodeAt(i));
-            }}
+            for (let i = 0; i < string.length; i++) {{ view.setUint8(offset + i, string.charCodeAt(i)); }}
         }}
         function pcmToWav(pcmData, sampleRate) {{
-            const numChannels = 1;
-            const bitsPerSample = 16;
-            const bytesPerSample = bitsPerSample / 8;
-            const blockAlign = numChannels * bytesPerSample;
-            const byteRate = sampleRate * blockAlign;
-            const dataSize = pcmData.byteLength;
-            const buffer = new ArrayBuffer(44 + dataSize);
-            const view = new DataView(buffer);
-            let offset = 0;
+            const numChannels = 1; const bitsPerSample = 16;
+            const bytesPerSample = bitsPerSample / 8; const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign; const dataSize = pcmData.byteLength;
+            const buffer = new ArrayBuffer(44 + dataSize); const view = new DataView(buffer); let offset = 0;
+ 
             writeString(view, offset, 'RIFF'); offset += 4;
             view.setUint32(offset, 36 + dataSize, true); offset += 4;
             writeString(view, offset, 'WAVE'); offset += 4;
@@ -242,35 +254,44 @@ with st.sidebar:
             view.setUint16(offset, bitsPerSample, true); offset += 2;
             writeString(view, offset, 'data'); offset += 4;
             view.setUint32(offset, dataSize, true); offset += 4;
+ 
             const pcm16 = new Int16Array(pcmData);
-            for (let i = 0; i < pcm16.length; i++) {{
-                view.setInt16(offset, pcm16[i], true);
-                offset += 2;
-            }}
+            for (let i = 0; i < pcm16.length; i++) {{ view.setInt16(offset, pcm16[i], true); offset += 2; }}
             return new Blob([buffer], {{ type: 'audio/wav' }});
         }}
-
-        // 再生＆口パク
+ 
+        // --- 再生ロジック ---
         const base64AudioData = '{st.session_state.audio_to_play}';
-        const sampleRate = 24000; // Gemini TTSのデフォルト
+        const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
+       
+        // 口パク開始
         if (window.startTalking) window.startTalking();
+       
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
         const audioUrl = URL.createObjectURL(wavBlob);
+       
         const audio = new Audio(audioUrl);
         audio.autoplay = true;
+ 
         audio.onended = () => {{
+            // 口パク終了
             if (window.stopTalking) window.stopTalking();
+            // URLを解放
             URL.revokeObjectURL(audioUrl);
         }};
         audio.play().catch(e => {{
+            console.error("Audio playback failed:", e);
+            // エラー時も口パク終了
             if (window.stopTalking) window.stopTalking();
             URL.revokeObjectURL(audioUrl);
         }});
-        </script>
-        """
-        components.html(js_code, height=0, width=0)
-        st.session_state.audio_to_play = None
+    </script>
+    """
+    # height=0, width=0のカスタムコンポーネントでスクリプトを実行
+    components.html(js_code, height=0, width=0)
+    # 再生トリガー実行後、データをクリア
+    st.session_state.audio_to_play = None
  
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
@@ -387,3 +408,6 @@ window.addEventListener('message', event => {
 });
 </script>
 """, height=0)
+ 
+ 
+ 
