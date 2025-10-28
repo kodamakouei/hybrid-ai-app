@@ -32,6 +32,7 @@ except (KeyError, AttributeError):
  
 # ===============================
 # アバター画像取得 (キャッシュ)
+# 【画像が見つからない場合でもエラー表示はしないが、ログに出力する】
 # ===============================
 @st.cache_data
 def get_avatar_images():
@@ -50,32 +51,28 @@ def get_avatar_images():
                 if os.path.exists(file_name):
                     with open(file_name, "rb") as f:
                         loaded_images[key] = base64.b64encode(f.read()).decode("utf-8")
-                        data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
+                        # 最初にロードできた拡張子でmimeTypeを設定
+                        if not data_uri_prefix:
+                            data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
+                        
                         if key == "close": found_close = True
                         if key == "open": found_open = True
-                        break
+                        break # 拡張子が見つかったら次へ
             except FileNotFoundError:
                 continue
- 
-    if found_close and found_open:
-        # 両方の画像が見つかった場合
-        return loaded_images["close"], loaded_images["open"], data_uri_prefix, True, ""
     
-    # 画像が見つからなかった場合のエラーメッセージ作成
-    missing_files = []
-    if not found_close: missing_files.append("yukki-close.jpg/jpeg")
-    if not found_open: missing_files.append("yukki-open.jpg/jpeg")
-    
-    error_message = f"以下のファイルが見つかりません: {', '.join(missing_files)}"
+    # どちらかの画像が見つからなかった場合、コンソールにメッセージを出力
+    if not found_close:
+        print("DEBUG: 'yukki-close.jpg/jpeg' file not found.")
+    if not found_open:
+        print("DEBUG: 'yukki-open.jpg/jpeg' file not found.")
 
-    # プレースホルダーSVG
-    placeholder_svg = base64.b64encode(
-        f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff5f5"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="#d00" font-family="sans-serif">❌ 画像ロードエラー</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="16" fill="#d00" font-family="sans-serif">両方のファイルが必要です。</text></svg>""".encode('utf-8')
-    ).decode("utf-8")
+    # 必須の2つの画像が見つからなかった場合、Noneを返す
+    if not (found_close and found_open):
+        return None, None, None, False
     
-    # プレースホルダーの場合は、両方の画像を同じSVGにし、has_images=Falseを返す
-    return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False, error_message
-
+    # 全て揃っている場合
+    return loaded_images["close"], loaded_images["open"], data_uri_prefix, True
  
 # ===============================
 # 音声データ生成とSession State保存（リトライロジック含む）
@@ -126,7 +123,7 @@ def generate_and_store_tts(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
  
-# --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
+# --- グローバルCSSの適用 ---
 st.markdown(f"""
 <style>
 /* Streamlitのヘッダー/トップバーを非表示にする（任意） */
@@ -146,7 +143,7 @@ header {{ visibility: hidden; }}
     border-radius: 16px;
     object-fit: cover;
     margin: 0 auto;
-    border: 3px solid #ff69b4; /* アバターの境界線を追加 */
+    border: 3px solid #ff69b4; 
     box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
 }}
 /* stSidebarContentにも幅を適用し、確実に固定 */
@@ -164,10 +161,10 @@ header {{ visibility: hidden; }}
 /* サイドバーの横スクロールバーを非表示にする */
 section[data-testid="stSidebar"] {{
     overflow-x: hidden !important;
-    width: {SIDEBAR_FIXED_WIDTH} !important; /* 再度固定幅を適用 */
+    width: {SIDEBAR_FIXED_WIDTH} !important; 
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    background-color: #f8e7ff !important; /* サイドバーの背景色を少し変える */
+    background-color: #f8e7ff !important; 
 }}
 
 </style>
@@ -180,7 +177,6 @@ if "client" not in st.session_state:
 if "chat" not in st.session_state:
     if st.session_state.client:
         config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-        # Chat Sessionを初期化する際に、configを渡す
         st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
     else:
         st.session_state.chat = None
@@ -191,38 +187,45 @@ if "audio_to_play" not in st.session_state:
  
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
-    # --- 変更点1: 画像のデータURIを取得 ---
-    img_close_base64, img_open_base64, data_uri_prefix, has_images, error_message = get_avatar_images()
+    # 画像のデータURIを取得
+    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
     
-    # 画像がなければ警告を表示
+    # 画像の表示と口パク制御JS関数の埋め込み
+    # 画像が見つからない場合、img_close_base64/img_open_base64はNoneになるため、
+    # HTML生成前に空の画像データを指定してエラー回避
+    
+    # has_images が False の場合、口パクJSは無効にする（コードは残すが実行しない）
     if not has_images:
-        st.error(f"❌ 画像ロードエラー: {error_message}。ファイル名を確認してください。")
- 
-    # --- 変更点2: アバター画像を表示し、口パク制御JS関数を埋め込む ---
+        # 画像が見つからない場合、透明な1x1 GIFをダミーで設定（表示されないように）
+        # ただし、CSSでサイズ指定されているため、黒い枠線のみ表示される
+        dummy_base64 = "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="
+        img_close_base64 = dummy_base64
+        data_uri_prefix = "data:image/gif;base64,"
+
     st.markdown(f"""
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     
     <script>
     // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64 if img_open_base64 else img_close_base64}";
+    const imagesLoaded = {'true' if has_images else 'false'}; // 画像が2枚あるかどうかのフラグ
     let talkingInterval = null;
     
     // 口パクを開始する関数
     window.startTalking = function() {{
-        const avatar = document.getElementById('avatar');
-        // 画像がロードされており、かつ画像が2枚ある場合のみ実行
-        if ({'true' if has_images else 'false'} && avatar) {{
+        // 画像がロードされている場合のみ実行
+        if (imagesLoaded) {{
+            const avatar = document.getElementById('avatar');
+            if (!avatar) return;
+
             let toggle = false;
-            // 既に動いている場合は停止
             if (talkingInterval) clearInterval(talkingInterval);
             // 160msごとに画像を切り替え
             talkingInterval = setInterval(() => {{
                 avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
             }}, 160); 
-        }} else {{
-            console.error("Avatar images not found or element missing. Lip sync disabled.");
         }}
     }}
     
@@ -232,7 +235,7 @@ with st.sidebar:
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
         // 常に口閉じ画像に戻す
-        if ({'true' if has_images else 'false'} && avatar) {{
+        if (imagesLoaded && avatar) {{
             avatar.src = imgCloseBase64;
         }}
     }}
@@ -284,8 +287,8 @@ if st.session_state.audio_to_play:
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
         
-        // ★修正点: window.startTalkingが存在するか確認してから呼び出す
-        if (window.startTalking && { 'true' if has_images else 'false' }) {{
+        // window.startTalkingが存在するか確認してから呼び出す
+        if (window.startTalking) {{
             window.startTalking();
         }}
         
@@ -297,7 +300,7 @@ if st.session_state.audio_to_play:
         audio.autoplay = true;
  
         audio.onended = () => {{ 
-            // ★修正点: window.stopTalkingが存在するか確認してから呼び出す
+            // window.stopTalkingが存在するか確認してから呼び出す
             if (window.stopTalking) window.stopTalking(); 
             // URLを解放
             URL.revokeObjectURL(audioUrl);
