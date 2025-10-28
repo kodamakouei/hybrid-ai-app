@@ -109,7 +109,7 @@ if "audio_to_play" not in st.session_state:
 
 # --- サイドバーに動画アバターを配置 ---
 with st.sidebar:
-    video_file = "yukki-.mp4"  # 口パク動画ファイル名
+    video_file = "yukki-lipsync.mp4"  # ファイル名を明示的に
     if os.path.exists(video_file):
         with open(video_file, "rb") as f:
             video_base64 = base64.b64encode(f.read()).decode("utf-8")
@@ -119,9 +119,10 @@ with st.sidebar:
             このブラウザは動画タグに対応していません。
         </video>
         """
+        st.markdown(video_tag, unsafe_allow_html=True)
     else:
-        video_tag = "<div style='width:400px;height:400px;background:#eee;text-align:center;line-height:400px;'>動画ファイルがありません</div>"
-    st.markdown(video_tag, unsafe_allow_html=True)
+        st.warning("動画ファイル yukki-lipsync.mp4 が見つかりません。")
+        video_tag = ""
 
     # 音声再生と動画再生を同時に制御
     if st.session_state.audio_to_play and os.path.exists(video_file):
@@ -197,7 +198,6 @@ with st.sidebar:
         """
         components.html(js_code, height=0, width=0)
         st.session_state.audio_to_play = None
-
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
