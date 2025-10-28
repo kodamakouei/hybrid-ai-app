@@ -27,7 +27,7 @@ TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
 # サイドバーの幅をこの値に合わせて調整 (画面幅の約1/4に設定)
-SIDEBAR_WIDTH = "25%" # 修正点: 33%から25%に変更
+SIDEBAR_WIDTH = "25%"
 
 # --- APIキーの読み込み ---
 try:
@@ -76,7 +76,7 @@ def generate_and_play_tts(text):
     if not API_KEY:
         st.error("APIキーが設定されていないため、音声生成はスキップされました。")
         return False
-        
+
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -96,7 +96,7 @@ def generate_and_play_tts(text):
             candidate = result.get('candidates', [{}])[0]
             part = candidate.get('content', {}).get('parts', [{}])[0]
             audio_data = part.get('inlineData', {})
-            
+
             if audio_data and audio_data.get('data'):
                 base64_data = audio_data['data']
                 mime_type = audio_data.get('mimeType', 'audio/L16;rate=24000')
@@ -104,7 +104,7 @@ def generate_and_play_tts(text):
                     sample_rate = int(mime_type.split('rate=')[1])
                 except IndexError:
                     sample_rate = 24000
-                
+
                 # JavaScriptでPCMをWAVに変換し、再生と口パク制御を行う
                 js_code = f"""
                 <script>
@@ -154,7 +154,7 @@ def generate_and_play_tts(text):
                     audio.autoplay = true;
 
                     audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-                    audio.play().catch(e => {{ 
+                    audio.play().catch(e => {{
                         console.error("Audio playback failed:", e);
                         if (window.stopTalking) window.stopTalking();
                     }});
@@ -189,28 +189,28 @@ st.markdown(f"""
 header {{ visibility: hidden; }}
 
 /* サイドバーのスタイルと固定位置 */
-section[data-testid="stSidebar"] {{ 
-    width: {SIDEBAR_WIDTH} !important; 
+section[data-testid="stSidebar"] {{
+    width: {SIDEBAR_WIDTH} !important;
     min-width: {SIDEBAR_WIDTH} !important;
-    max-width: {SIDEBAR_WIDTH} !important; 
-    background-color: #FFFFFF !important; 
+    max-width: {SIDEBAR_WIDTH} !important;
+    background-color: #FFFFFF !important;
     height: 100vh;
     padding-top: 20px;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     z-index: 1000;
     
     /* サイドバーを固定 */
-    position: fixed !important; /* 変更点: !important を追加 */
+    position: fixed !important;
     left: 0;
-    top: 0; 
-    display: block !important; /* 変更点: 表示を強制 */
+    top: 0;
+    display: block !important;
 }}
 
 /* メインコンテンツのコンテナ（stApp）に左マージンを設定 */
 .stApp {{
     /* Streamlitのメインコンテンツのラッパー */
-    margin-left: {SIDEBAR_WIDTH}; 
-    padding-left: 1rem; 
+    margin-left: {SIDEBAR_WIDTH};
+    padding-left: 1rem;
     padding-right: 1rem;
     padding-top: 1rem;
 }}
@@ -223,13 +223,13 @@ section[data-testid="stSidebar"] {{
     justify-content: flex-start;
     padding-top: 50px;
 }}
-.avatar {{ 
-    max-width: 90%; 
-    height: auto; 
-    border-radius: 16px; 
-    object-fit: cover; 
-    border: 5px solid #ff69b4; 
-    box-shadow: 0 4px 10px rgba(255,105,180,0.5); 
+.avatar {{
+    max-width: 80%; /* 修正点: 90%から80%へ変更 */
+    height: auto;
+    border-radius: 16px;
+    object-fit: cover;
+    border: 5px solid #ff69b4;
+    box-shadow: 0 4px 10px rgba(255,105,180,0.5);
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -263,13 +263,13 @@ with st.sidebar:
     
     // グローバルな口パク開始関数
     window.startTalking = function() {{
-        const avatar = document.getElementById('avatar'); 
+        const avatar = document.getElementById('avatar');
         if ({'true' if has_images else 'false'} && avatar) {{
             let toggle = false;
             if (talkingInterval) clearInterval(talkingInterval);
-            talkingInterval = setInterval(() => {{ 
-                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64; 
-                toggle = !toggle; 
+            talkingInterval = setInterval(() => {{
+                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
+                toggle = !toggle;
             }}, 160);
         }}
     }}
@@ -277,9 +277,9 @@ with st.sidebar:
     // グローバルな口パク停止関数
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
-        const avatar = document.getElementById('avatar'); 
-        if ({'true' if has_images else 'false'} && avatar) {{ 
-            avatar.src = imgCloseBase64; 
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'} && avatar) {{
+            avatar.src = imgCloseBase64;
         }}
     }}
     </script>
@@ -289,7 +289,7 @@ with st.sidebar:
     st.subheader("音声入力")
     components.html("""
     <div id="mic-container" style="padding: 10px 0;">
-        <button onclick="window.parent.startRec()" 
+        <button onclick="window.parent.startRec()"
                 style="background-color: #ff69b4; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px;">
             🎙 話す
         </button>
@@ -300,7 +300,7 @@ with st.sidebar:
     function sendTextToStreamlit(text) {
         // Streamlitのiframeの親ウィンドウに対してメッセージを送信
         window.parent.postMessage({
-            type: 'SET_CHAT_INPUT', 
+            type: 'SET_CHAT_INPUT',
             text: text
         }, '*');
     }
@@ -326,11 +326,11 @@ with st.sidebar:
             sendTextToStreamlit(text); // 認識結果をStreamlitへ送信
         };
         
-        recognition.onerror = (e) => { 
-            document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; 
+        recognition.onerror = (e) => {
+            document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
         };
         
-        recognition.onend = () => { 
+        recognition.onend = () => {
             if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
                 document.getElementById("mic-status").innerText = "マイク停止中";
             }
