@@ -86,6 +86,8 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "audio_to_play" not in st.session_state:
+    st.session_state.audio_to_play = None
 if st.session_state.audio_to_play:
     st.sidebar.markdown(f"""
     <script>
