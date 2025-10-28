@@ -54,7 +54,7 @@ def get_avatar_images():
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
 
 # ===============================
-# ★★★ 変更点：音声データを生成し、Session Stateに保存する関数 ★★★
+# 音声データを生成し、Session Stateに保存する関数
 # ===============================
 def generate_and_store_tts(text):
     if not API_KEY:
@@ -69,7 +69,6 @@ def generate_and_store_tts(text):
         response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         result = response.json()
-        # 音声データをst.session_stateに保存
         st.session_state.audio_to_play = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
     except Exception as e:
         st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
@@ -90,11 +89,12 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
-# ★★★ 変更点：音声再生用のセッションステートを追加 ★★★
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
+if "new_prompt" not in st.session_state:
+    st.session_state.new_prompt = None
 
-# --- サイドバーにアバターと関連要素を配置 ---
+# --- サイドバー ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
     st.markdown(f"""
@@ -125,7 +125,7 @@ with st.sidebar:
     </script>
     """, unsafe_allow_html=True)
 
-# ★★★ 変更点：音声再生トリガーをここに追加 ★★★
+# --- 音声再生トリガー ---
 if st.session_state.audio_to_play:
     st.sidebar.markdown(f"""
     <script>
@@ -139,73 +139,68 @@ if st.session_state.audio_to_play:
     }});
     </script>
     """, unsafe_allow_html=True)
-    # 再生したらクリアする
     st.session_state.audio_to_play = None
 
 # --- メインコンテンツ ---
-st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
+st.title("🎀 ユッキー")
 
-# 音声認識ボタンとチャット履歴の表示
-st.subheader("音声入力")
-components.html("""
-<div id="mic-container">
-    <button onclick="window.parent.startRec()">🎙 話す</button>
-    <p id="mic-status">マイク停止中</p>
-</div>
-<script>
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.continuous = false;
-    window.parent.startRec = () => {
-        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-        recognition.start();
-    };
-    recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        document.getElementById("mic-status").innerText = "✅ " + text;
-        window.parent.postMessage({type: 'SET_CHAT_INPUT', text: text}, '*');
-    };
-    recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
-    recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
-} else {
-    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
-}
-</script>
-""", height=130)
-
-st.subheader("ユッキーとの会話履歴")
+# チャット履歴の表示
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "🤖"):
         st.markdown(msg["content"])
 
-# --- チャット入力と処理 ---
-if prompt := st.chat_input("質問を入力してください..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# --- 入力ウィジェット ---
+prompt = st.chat_input("質問を入力してください...")
+st.subheader("音声入力")
+voice_prompt = components.html("""
+<div id="mic-container">
+    <button onclick="startRec()">🎙 話す</button>
+    <p id="mic-status">マイク停止中</p>
+</div>
+<script>
+function startRec() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+        return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = false;
+    document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
+    recognition.start();
+    recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        document.getElementById("mic-status").innerText = "✅ " + text;
+        // Streamlitに値を返す
+        window.parent.Streamlit.setComponentValue(text);
+    };
+    recognition.onerror = (e) => { document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error; };
+    recognition.onend = () => { if (document.getElementById("mic-status").innerText.startsWith("🎧")) document.getElementById("mic-status").innerText = "マイク停止中"; }
+}
+</script>
+""", height=130)
+
+# --- 入力値の処理 ---
+if prompt:
+    st.session_state.new_prompt = prompt
+if voice_prompt:
+    st.session_state.new_prompt = voice_prompt
+
+if st.session_state.new_prompt:
+    final_prompt = st.session_state.new_prompt
+    st.session_state.new_prompt = None
+
+    st.session_state.messages.append({"role": "user", "content": final_prompt})
     if st.session_state.chat:
-        response = st.session_state.chat.send_message(prompt)
-        text = response.text
-        st.session_state.messages.append({"role": "assistant", "content": text})
-        # ★★★ 変更点：音声データを生成してセッションステートに保存 ★★★
-        generate_and_store_tts(text)
+        try:
+            response = st.session_state.chat.send_message(final_prompt)
+            text = response.text
+            st.session_state.messages.append({"role": "assistant", "content": text})
+            generate_and_store_tts(text)
+        except Exception as e:
+            st.session_state.messages.append({"role": "assistant", "content": f"❌ エラーが発生しました: {e}"})
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
+    
     st.rerun()
-
-# --- 音声認識からチャット入力へテキストを転送するJavaScript ---
-components.html("""
-<script>
-window.addEventListener('message', event => {
-    if (event.data.type === 'SET_CHAT_INPUT') {
-        const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-        if (chatInput) {
-            chatInput.value = event.data.text;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
-            chatInput.dispatchEvent(enterEvent);
-        }
-    }
-});
-</script>
-""", height=0)
