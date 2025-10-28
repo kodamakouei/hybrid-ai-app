@@ -118,6 +118,7 @@ with st.sidebar:
             <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
             このブラウザは動画タグに対応していません。
         </video>
+        <button id="play_btn" style="margin:10px auto;display:block;">▶️ ユッキー再生</button>
         """
         st.markdown(video_tag, unsafe_allow_html=True)
     else:
