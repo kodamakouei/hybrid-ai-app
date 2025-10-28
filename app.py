@@ -26,8 +26,8 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
-# サイドバーの幅をこの値に合わせて調整
-SIDEBAR_WIDTH = "450px"
+# サイドバーの幅をこの値に合わせて調整 (画面幅の約1/3に設定)
+SIDEBAR_WIDTH = "33%" # 変更点: 固定ピクセルから割合へ
 
 # --- APIキーの読み込み ---
 try:
@@ -198,28 +198,25 @@ section[data-testid="stSidebar"] {{
     padding-top: 20px;
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     z-index: 1000;
+    
+    /* 変更点: サイドバーを固定する */
+    position: fixed; 
+    left: 0;
+    top: 0; 
 }}
 
 /* メインコンテンツのコンテナにサイドバーの幅だけ左マージンを設定し、横に並ぶようにする */
 /* stAppのラッパーを調整 */
 .stApp {{
     /* Streamlitのメインコンテンツのラッパー */
-    margin-left: {SIDEBAR_WIDTH};
+    /* 変更点: サイドバーの幅（%）に合わせてマージンを設定 */
+    margin-left: {SIDEBAR_WIDTH}; 
     padding-left: 1rem; /* 必要に応じて調整 */
     padding-right: 1rem;
     padding-top: 1rem;
 }}
 
 /* アバターを中央に配置 */
-/* st-emotion-cache-1y4p8pa は st.sidebar 内のコンテナ（古いCSSセレクタの可能性もあるため念のため残すが、新しいStreamlitでは不要かも） */
-/* .st-emotion-cache-1y4p8pa {{ 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: flex-start; 
-    height: auto;
-    padding-top: 50px;
-}} */
 /* st-emotion-cache-vk3ypz は新しいStreamlitのSidebar内のコンテナ */
 [data-testid="stSidebarContent"] > div:first-child {{
     display: flex;
@@ -229,8 +226,9 @@ section[data-testid="stSidebar"] {{
     padding-top: 50px;
 }}
 .avatar {{ 
-    width: 400px; 
-    height: 400px; 
+    /* サイドバーの幅に合わせてアバターの最大幅を調整 */
+    max-width: 90%; 
+    height: auto; 
     border-radius: 16px; 
     object-fit: cover; 
     border: 5px solid #ff69b4; 
