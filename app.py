@@ -204,8 +204,9 @@ section[data-testid="stSidebar"] {{
     top: 0;
     display: block !important;
     
-    /* サイドバー自体に左パディングを追加 */
-    padding-left: 1rem;
+    /* ★修正点: サイドバー全体に左右のパディングを追加して、左端との間に余白を作る */
+    padding-left: 1.5rem !important; /* 左側にゆとりを持たせる */
+    padding-right: 1.5rem !important; /* 右側にもゆとりを持たせる */
     padding-top: 20px; 
     box-sizing: border-box; 
 }}
