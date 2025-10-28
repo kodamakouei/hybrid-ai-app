@@ -224,7 +224,7 @@ section[data-testid="stSidebar"] {{
     padding-top: 50px;
 }}
 .avatar {{
-    max-width: 80%; /* 修正点: 90%から80%へ変更 */
+    max-width: 300px; /* 修正点: 90%から80%へ変更 */
     height: auto;
     border-radius: 16px;
     object-fit: cover;
