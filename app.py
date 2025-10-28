@@ -171,16 +171,12 @@ with st.sidebar:
     st.markdown(f"""
     <style>
     section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
-    /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
     .main {{ background-color: #FFFFFF !important; }}
-   
-    /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
    
     <script>
-    // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
@@ -209,77 +205,21 @@ with st.sidebar:
  
 # --- 音声再生トリガーをサイドバーに追加（口パク制御とWAV変換ロジックを統合） ---
 if st.session_state.audio_to_play:
-    # WAV変換ヘルパー関数を定義したJavaScriptコードを挿入
-    js_code = f"""
-    <script>
-        // --- PCM to WAV Utility Functions ---
-        function base64ToArrayBuffer(base64) {{
-            const binary_string = window.atob(base64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {{ bytes[i] = binary_string.charCodeAt(i); }}
-            return bytes.buffer;
-        }}
-        function writeString(view, offset, string) {{
-            for (let i = 0; i < string.length; i++) {{ view.setUint8(offset + i, string.charCodeAt(i)); }}
-        }}
-        function pcmToWav(pcmData, sampleRate) {{
-            const numChannels = 1; const bitsPerSample = 16;
-            const bytesPerSample = bitsPerSample / 8; const blockAlign = numChannels * bytesPerSample;
-            const byteRate = sampleRate * blockAlign; const dataSize = pcmData.byteLength;
-            const buffer = new ArrayBuffer(44 + dataSize); const view = new DataView(buffer); let offset = 0;
- 
-            writeString(view, offset, 'RIFF'); offset += 4;
-            view.setUint32(offset, 36 + dataSize, true); offset += 4;
-            writeString(view, offset, 'WAVE'); offset += 4;
-            writeString(view, offset, 'fmt '); offset += 4;
-            view.setUint32(offset, 16, true); offset += 4;
-            view.setUint16(offset, 1, true); offset += 2;
-            view.setUint16(offset, numChannels, true); offset += 2;
-            view.setUint32(offset, sampleRate, true); offset += 4;
-            view.setUint32(offset, byteRate, true); offset += 4;
-            view.setUint16(offset, blockAlign, true); offset += 2;
-            view.setUint16(offset, bitsPerSample, true); offset += 2;
-            writeString(view, offset, 'data'); offset += 4;
-            view.setUint32(offset, dataSize, true); offset += 4;
- 
-            const pcm16 = new Int16Array(pcmData);
-            for (let i = 0; i < pcm16.length; i++) {{ view.setInt16(offset, pcm16[i], true); offset += 2; }}
-            return new Blob([buffer], {{ type: 'audio/wav' }});
-        }}
- 
-        // --- 再生ロジック ---
-        const base64AudioData = '{st.session_state.audio_to_play}';
-        const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
-       
-        // 口パク開始
+        js_code = f"""
+        <script>
         if (window.startTalking) window.startTalking();
-       
-        const pcmData = base64ToArrayBuffer(base64AudioData);
-        const wavBlob = pcmToWav(pcmData, sampleRate);
-        const audioUrl = URL.createObjectURL(wavBlob);
-       
-        const audio = new Audio(audioUrl);
+        const audio = new Audio('data:audio/wav;base64,{st.session_state.audio_to_play}');
         audio.autoplay = true;
- 
         audio.onended = () => {{
-            // 口パク終了
             if (window.stopTalking) window.stopTalking();
-            // URLを解放
-            URL.revokeObjectURL(audioUrl);
         }};
         audio.play().catch(e => {{
-            console.error("Audio playback failed:", e);
-            // エラー時も口パク終了
             if (window.stopTalking) window.stopTalking();
-            URL.revokeObjectURL(audioUrl);
         }});
-    </script>
-    """
-    # height=0, width=0のカスタムコンポーネントでスクリプトを実行
-    components.html(js_code, height=0, width=0)
-    # 再生トリガー実行後、データをクリア
-    st.session_state.audio_to_play = None
+        </script>
+        """
+        st.markdown(js_code, unsafe_allow_html=True)
+        st.session_state.audio_to_play = None
  
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
