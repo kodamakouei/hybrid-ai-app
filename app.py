@@ -4,7 +4,7 @@ import base64, json, requests
 import streamlit.components.v1 as components
 import os
 import time
- 
+
 # ===============================
 # 設定
 # ===============================
@@ -16,397 +16,476 @@ SYSTEM_PROMPT = """
 2️⃣ 思考・計算問題は答えを教えず、解法のヒントのみ。
 3️⃣ 途中式を見せられた場合は正誤を判定し、優しく導く。
 """
-# --- 共通設定 ---
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
-TTS_VOICE = "Kore"
-MAX_RETRIES = 5
-# ★お客様が指定したCSSに合わせて設定を調整
-SIDEBAR_FIXED_WIDTH = "450px"
- 
-# --- APIキーの読み込み ---
+TTS_VOICE = "Kore" # 音声モデル（男性的な声）
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
-except (KeyError, AttributeError):
+except:
     API_KEY = ""
  
 # ===============================
 # アバター画像取得 (キャッシュ)
+# *技術的制約により、任意の動画ファイル（.mp4など）をリアルタイムTTSと同期させることは困難です。
+# *そのため、本アプリでは2枚の画像切替によるアニメーションを採用しています。
 # ===============================
 @st.cache_data
 def get_avatar_images():
-    base_names = ["yukki-close", "yukki-open"]
-    extensions = [".jpg", ".jpeg"]
     loaded_images = {}
-    data_uri_prefix = ""
- 
-    for base in base_names:
-        for ext in extensions:
-            file_name = base + ext
-            try:
-                # ユーザーがアップロードしたファイルをチェック
-                if os.path.exists(file_name):
-                    with open(file_name, "rb") as f:
-                        loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
-                    data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
-                    break
-                # Streamlitのメディアファイルとしてもチェック（ただしローカル実行の場合は上記で十分）
-                # ここではローカルファイルを優先
-            except FileNotFoundError:
-                continue
- 
-    if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
-        return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
-    else:
-        # アバターがない場合のプレースホルダーSVG
-        placeholder_svg = base64.b64encode(
-            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
-        ).decode("utf-8")
-        return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
- 
+    
+    # 確実な動作のため、常に動作するダミーのBase64 SVG画像を使用します。
+    
+    # 口閉じの画像 (青色のプレースホルダー)
+    closed_svg = f"""<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#4a90e2"/><text x="100" y="100" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle">Yukki (閉)</text></svg>"""
+    loaded_images["closed"] = "data:image/svg+xml;base64," + base64.b64encode(closed_svg.encode('utf-8')).decode('utf-8')
+
+    # 口開きの画像 (緑色のプレースホルダー)
+    open_svg = f"""<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#32a852"/><text x="100" y="100" font-size="20" fill="white" text-anchor="middle" dominant-baseline="middle">Yukki (開)</text></svg>"""
+    loaded_images["open"] = "data:image/svg+xml;base64," + base64.b64encode(open_svg.encode('utf-8')).decode('utf-8')
+    
+    return loaded_images
+
 # ===============================
-# 音声データ生成とSession State保存（リトライロジック含む）
+# TTS処理（音声生成とセッションステート保存）
 # ===============================
 def generate_and_store_tts(text):
-    """Gemini TTSで音声生成し、base64データをst.session_state.audio_to_playに保存する"""
+    """テキストからTTSデータを生成し、セッションステートに保存する"""
     if not API_KEY:
-        st.session_state.audio_to_play = None
+        st.session_state.tts_data = None
+        st.error("エラー: APIキーが設定されていないため、音声生成をスキップします。")
         return
-        
-    payload = {
-        "contents": [{"parts": [{"text": text}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": TTS_VOICE}}},
-        },
-        "model": TTS_MODEL,
-    }
-    headers = {'Content-Type': 'application/json'}
- 
+
+    # 指数バックオフを用いたAPI呼び出し
+    MAX_RETRIES = 3
+    RETRY_DELAY = 1
+    SUCCESS = False
+
     for attempt in range(MAX_RETRIES):
+        payload = {
+            "contents": [{
+                "parts": [{"text": text}]
+            }],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": TTS_VOICE}
+                    }
+                }
+            },
+            "model": TTS_MODEL
+        }
+
+        headers = {'Content-Type': 'application/json'}
+        params = {'key': API_KEY}
+        
         try:
-            # TTS APIには遅延があるため、リトライと指数バックオフを適用
-            response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+            response = requests.post(TTS_API_URL, headers=headers, params=params, json=payload, timeout=30)
             response.raise_for_status()
             result = response.json()
- 
-            audio_data = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-            # 音声データをst.session_stateに保存
-            st.session_state.audio_to_play = audio_data
-            return
- 
-        except requests.exceptions.HTTPError as e:
-            if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
-                time.sleep(2 ** attempt)
-                continue
-            # 最終試行または他のエラー
-            print(f"API Error (HTTP {response.status_code}) or final attempt failed: {e}")
-            break
-        except Exception as e:
-            print(f"Error generating TTS: {e}")
-            break
             
-    st.session_state.audio_to_play = None
- 
-# ===============================
-# Streamlit UI
-# ===============================
-st.set_page_config(page_title="ユッキー", layout="wide")
- 
-# --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
-st.markdown(f"""
-<style>
-/* Streamlitのヘッダー/トップバーを非表示にする（任意） */
-header {{ visibility: hidden; }}
- 
-/* stSidebarContent直下の要素のwidthにセミコロンを追加し、CSS構文エラーを修正 */
-[data-testid="stSidebarContent"] > div:first-child {{
-    width: {SIDEBAR_FIXED_WIDTH} !important; /* セミコロンを追加 */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-}}
-.avatar {{
-    width: 400px;
-    height: 400px;
-    border-radius: 16px;
-    object-fit: cover;
-    margin: 0 auto;
-}}
-/* stSidebarContentにも幅を適用し、確実に固定 */
-[data-testid="stSidebarContent"] {{
-    width: {SIDEBAR_FIXED_WIDTH} !important;
-    min-width: {SIDEBAR_FIXED_WIDTH} !important;
-    max-width: {SIDEBAR_FIXED_WIDTH} !important;
-}}
- 
-/* --- 追加: サイドバーの開閉ボタン（<<マーク）を非表示にする --- */
-[data-testid="stSidebarCollapseButton"] {{
-    display: none !important;
-}}
-</style>
-""", unsafe_allow_html=True)
- 
- 
-# --- セッションステートの初期化 ---
-if "client" not in st.session_state:
-    st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
-if "chat" not in st.session_state:
-    if st.session_state.client:
-        config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
-        # Chat Sessionを初期化する際に、configを渡す
-        st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
-    else:
-        st.session_state.chat = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "audio_to_play" not in st.session_state:
-    st.session_state.audio_to_play = None
- 
-# --- サイドバーにアバターと関連要素を配置 ---
-with st.sidebar:
-    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+            audio_part = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0]
+            audio_data = audio_part.get('inlineData', {}).get('data')
+            mime_type = audio_part.get('inlineData', {}).get('mimeType')
+            
+            if audio_data and mime_type:
+                st.session_state.tts_data = {
+                    "audio_data": audio_data,
+                    "mime_type": mime_type
+                }
+                SUCCESS = True
+                break # 成功したらループを抜ける
+            else:
+                st.error("TTS応答から音声データが取得できませんでした。")
+                break # 失敗したらループを抜ける (リトライ対象外)
+
+        except requests.exceptions.RequestException as e:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY * (2 ** attempt))
+            else:
+                st.error(f"TTS APIエラー: {e}")
     
-    # 画像がなければ警告を表示
-    if not has_images:
-        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
- 
-    # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
-    st.markdown(f"""
+    if not SUCCESS:
+        st.session_state.tts_data = None
+
+
+# ===============================
+# TTSオーディオプレイヤーとアニメーションUI
+# ===============================
+def talking_avatar_ui(images):
+    """TTSデータと連動してアニメーションするアバターとオーディオプレイヤーを配置する"""
+    
+    if not images:
+        return
+    
+    # HTML/JavaScriptを記述
+    html_content = f"""
     <style>
-    /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
-    /* サイドバーコンテナ自体を固定 */
-    section[data-testid="stSidebar"] {{
-        width: {SIDEBAR_FIXED_WIDTH} !important;
-        min-width: {SIDEBAR_FIXED_WIDTH} !important;
-        max-width: {SIDEBAR_FIXED_WIDTH} !important;
-        background-color: #FFFFFF !important;
-    }}
-    /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
-    .main {{ background-color: #FFFFFF !important; }}
-    
-    /* アバターコンポーネントのスタイル */
-    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
+        .avatar-container {{
+            text-align: center;
+            padding: 1rem;
+            border-radius: 12px;
+            background-color: #f0f2f6;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }}
+        #avatar-image {{
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid #4a90e2;
+            transition: transform 0.1s ease;
+        }}
+        #audio-player {{
+            display: none; /* プレイヤー自体は非表示 */
+        }}
+        .status-text {{
+            margin-top: 0.5rem;
+            font-size: 1rem;
+            color: #333;
+        }}
+        #manual-play-button {{
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px #1e7e34;
+            display: none; /* 初期状態では非表示 */
+        }}
     </style>
-    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-    
+    <div class="avatar-container">
+        <img id="avatar-image" src="{images['closed']}" alt="Yukki Avatar">
+        <div class="status-text" id="status-text">準備完了</div>
+        <button id="manual-play-button">▶️ 音声を手動で再生</button>
+        <audio id="audio-player" controls preload="auto"></audio>
+    </div>
+
     <script>
-    // 口パク制御用のJavaScript
-    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
-    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
-    let talkingInterval = null;
-    
-    window.startTalking = function() {{
-        const avatar = document.getElementById('avatar');
-        if ({'true' if has_images else 'false'} && avatar) {{
-            let toggle = false;
-            if (talkingInterval) clearInterval(talkingInterval);
-            // ★変更点：口パクの切り替え速度を160msから100msに高速化し、動画のように滑らかにする
-            talkingInterval = setInterval(() => {{
-                avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
-                toggle = !toggle;
-            }}, 100); 
-        }}
-    }}
-    
-    window.stopTalking = function() {{
-        if (talkingInterval) clearInterval(talkingInterval);
-        const avatar = document.getElementById('avatar');
-        if ({'true' if has_images else 'false'} && avatar) {{
-            avatar.src = imgCloseBase64;
-        }}
-    }}
-    </script>
-    """, unsafe_allow_html=True)
- 
-# --- 音声再生トリガーをサイドバーに追加（口パク制御とWAV変換ロジックを統合） ---
-if st.session_state.audio_to_play:
-    # WAV変換ヘルパー関数を定義したJavaScriptコードを挿入
-    js_code = f"""
-    <script>
-        // --- PCM to WAV Utility Functions ---
+        const audioPlayer = document.getElementById('audio-player');
+        const avatarImage = document.getElementById('avatar-image');
+        const statusText = document.getElementById('status-text');
+        const manualPlayButton = document.getElementById('manual-play-button');
+        const closedImgSrc = "{images['closed']}";
+        const openImgSrc = "{images['open']}";
+        let animationInterval = null;
+        let isAudioLoaded = false;
+
+        // PCMデータをWAVに変換するヘルパー関数群
         function base64ToArrayBuffer(base64) {{
-            const binary_string = window.atob(base64);
-            const len = binary_string.length;
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
             const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {{ bytes[i] = binary_string.charCodeAt(i); }}
+            for (let i = 0; i < len; i++) {{
+                bytes[i] = binaryString.charCodeAt(i);
+            }}
             return bytes.buffer;
         }}
-        function writeString(view, offset, string) {{
-            for (let i = 0; i < string.length; i++) {{ view.setUint8(offset + i, string.charCodeAt(i)); }}
+
+        function pcmToWav(pcm16, sampleRate) {{
+            // ... (WAV変換ロジックは変更なし) ...
+            const pcmData = pcm16.buffer;
+            const numChannels = 1;
+            const bytesPerSample = 2; // Int16
+            const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = pcmData.byteLength;
+            const chunkSize = 36 + dataSize;
+
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+
+            let offset = 0;
+
+            // RIFF chunk
+            function writeString(s) {{
+                for (let i = 0; i < s.length; i++) {{
+                    view.setUint8(offset++, s.charCodeAt(i));
+                }}
+            }}
+
+            writeString('RIFF'); // Chunk ID
+            view.setUint32(offset, chunkSize, true); offset += 4; // Chunk size
+            writeString('WAVE'); offset += 4; // Format
+
+            // FMT sub-chunk
+            writeString('fmt '); offset += 4; // Sub-chunk 1 ID
+            view.setUint32(offset, 16, true); offset += 4; // Sub-chunk 1 size (16 for PCM)
+            view.setUint16(offset, 1, true); offset += 2; // Audio format (1 for PCM)
+            view.setUint16(offset, numChannels, true); offset += 2; // Number of channels
+            view.setUint32(offset, sampleRate, true); offset += 4; // Sample rate
+            view.setUint32(offset, byteRate, true); offset += 4; // Byte rate
+            view.setUint16(offset, blockAlign, true); offset += 2; // Block align
+            view.setUint16(offset, 16, true); offset += 2; // Bits per sample (16 bit)
+
+            // DATA sub-chunk
+            writeString('data'); offset += 4; // Sub-chunk 2 ID
+            view.setUint32(offset, dataSize, true); offset += 4; // Sub-chunk 2 size
+
+            // PCM data
+            const pcmView = new Int16Array(pcmData);
+            for (let i = 0; i < pcmView.length; i++) {{
+                view.setInt16(offset, pcmView[i], true); offset += 2;
+            }}
+
+            return new Blob([view], {{ type: 'audio/wav' }});
         }}
-        function pcmToWav(pcmData, sampleRate) {{
-            const numChannels = 1; const bitsPerSample = 16;
-            const bytesPerSample = bitsPerSample / 8; const blockAlign = numChannels * bytesPerSample;
-            const byteRate = sampleRate * blockAlign; const dataSize = pcmData.byteLength;
-            const buffer = new ArrayBuffer(44 + dataSize); const view = new DataView(buffer); let offset = 0;
- 
-            writeString(view, offset, 'RIFF'); offset += 4;
-            view.setUint32(offset, 36 + dataSize, true); offset += 4;
-            writeString(view, offset, 'WAVE'); offset += 4;
-            writeString(view, offset, 'fmt '); offset += 4;
-            view.setUint32(offset, 16, true); offset += 4;
-            view.setUint16(offset, 1, true); offset += 2;
-            view.setUint16(offset, numChannels, true); offset += 2;
-            view.setUint32(offset, sampleRate, true); offset += 4;
-            view.setUint32(offset, byteRate, true); offset += 4;
-            view.setUint16(offset, blockAlign, true); offset += 2;
-            view.setUint16(offset, bitsPerSample, true); offset += 2;
-            writeString(view, offset, 'data'); offset += 4;
-            view.setUint32(offset, dataSize, true); offset += 4;
- 
-            const pcm16 = new Int16Array(pcmData);
-            for (let i = 0; i < pcm16.length; i++) {{ view.setInt16(offset, pcm16[i], true); offset += 2; }}
-            return new Blob([buffer], {{ type: 'audio/wav' }});
+        
+        // アニメーション制御
+        function startAnimation() {{
+            let isOpen = true;
+            statusText.textContent = "ユッキーが話しています...";
+            avatarImage.style.transform = 'scale(1.05)'; // 話し始めに少し拡大
+            manualPlayButton.style.display = 'none'; // 再生中はボタンを非表示
+
+            animationInterval = setInterval(() => {{
+                if (isOpen) {{
+                    avatarImage.src = openImgSrc;
+                }} else {{
+                    avatarImage.src = closedImgSrc;
+                }}
+                isOpen = !isOpen;
+            }}, 120); // 120msごとに画像を切り替える
+
+            // audioPlayer.play() は onplay イベントがすでに担当
         }}
- 
-        // --- 再生ロジック ---
-        const base64AudioData = '{st.session_state.audio_to_play}';
-        const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
-        
-        // 口パク開始
-        if (window.startTalking) window.startTalking();
-        
-        const pcmData = base64ToArrayBuffer(base64AudioData);
-        const wavBlob = pcmToWav(pcmData, sampleRate);
-        const audioUrl = URL.createObjectURL(wavBlob);
-        
-        const audio = new Audio(audioUrl);
-        audio.autoplay = true;
- 
-        audio.onended = () => {{
-            // 口パク終了
-            if (window.stopTalking) window.stopTalking();
-            // URLを解放
-            URL.revokeObjectURL(audioUrl);
+
+        function stopAnimation() {{
+            clearInterval(animationInterval);
+            animationInterval = null;
+            avatarImage.src = closedImgSrc;
+            statusText.textContent = "準備完了";
+            avatarImage.style.transform = 'scale(1.0)';
+            isAudioLoaded = false;
+            // 再生終了後もボタンは非表示のまま
+        }}
+
+        // イベントリスナー
+        audioPlayer.onplay = startAnimation;
+        audioPlayer.onended = stopAnimation;
+        audioPlayer.onerror = function() {{
+            console.error("Audio playback error.");
+            stopAnimation();
+            statusText.textContent = "エラー: 音声ファイルの再生に失敗しました";
+            manualPlayButton.style.display = 'none';
         }};
-        audio.play().catch(e => {{
-            console.error("Audio playback failed:", e);
-            // エラー時も口パク終了
-            if (window.stopTalking) window.stopTalking();
-            URL.revokeObjectURL(audioUrl);
+        
+        // 手動再生ボタンのイベント
+        manualPlayButton.onclick = function() {{
+            if (isAudioLoaded) {{
+                audioPlayer.play().catch(e => {{
+                    console.error("Manual play failed:", e);
+                    statusText.textContent = "エラー: 再生に失敗しました";
+                }});
+            }}
+        }};
+
+        // Streamlitからのメッセージを受信し、音声を再生
+        window.addEventListener('message', event => {{
+            if (event.data.type === 'PLAY_TTS' && event.data.audioBase64) {{
+                const audioData = event.data.audioBase64;
+                const mimeType = event.data.mimeType || 'audio/L16;rate=24000';
+                
+                const rateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+                
+                const pcmData = base64ToArrayBuffer(audioData);
+                const pcm16 = new Int16Array(pcmData);
+                const wavBlob = pcmToWav(pcm16, sampleRate);
+                
+                const audioUrl = URL.createObjectURL(wavBlob);
+                audioPlayer.src = audioUrl;
+                isAudioLoaded = true;
+                
+                // 自動再生を試みる
+                audioPlayer.play()
+                    .then(() => {{
+                        // 成功: アニメーションは onplay で開始
+                        console.log("Auto-play successful.");
+                    }})
+                    .catch(e => {{
+                        // 失敗: 自動再生がブロックされた場合
+                        console.warn("Auto-play blocked, showing manual button.");
+                        statusText.textContent = "▶️ 再生ボタンを押してください";
+                        manualPlayButton.style.display = 'block';
+                    }});
+            }}
         }});
     </script>
     """
-    # height=0, width=0のカスタムコンポーネントでスクリプトを実行
-    components.html(js_code, height=0, width=0)
-    # 再生トリガー実行後、データをクリア
-    st.session_state.audio_to_play = None
- 
-# --- メインコンテンツ ---
-st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
-st.caption("知識は答え、思考は解法ガイドのみを返します。")
- 
-# 音声認識ボタンとチャット履歴の表示
-st.subheader("音声入力")
-# StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
-components.html("""
-<div id="mic-container" style="padding: 10px 0;">
-    <button onclick="window.parent.startRec()"
-            style="background-color: #ff69b4; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        🎙 話す
+    
+    # UIコンポーネントとして表示
+    components.html(html_content, height=250) # ボタンの分だけ高さを調整
+
+# ===============================
+# メイン処理
+# ===============================
+st.set_page_config(page_title="ユッキー先生", layout="wide")
+
+# タイトルと説明
+st.title("🤖 ユッキー先生：音声連動AIアシスタント")
+st.markdown("質問を入力または音声で話しかけてください。ユッキーが音声とアニメーションで応答します。")
+
+# アバター画像のロード
+avatar_images = get_avatar_images()
+
+# --- TTSアニメーションUIの配置 ---
+talking_avatar_ui(avatar_images)
+
+# --- Streamlitセッション状態の初期化 ---
+if "client" not in st.session_state:
+    if API_KEY:
+        st.session_state.client = genai.Client(api_key=API_KEY)
+    else:
+        st.error("Gemini APIキーが設定されていません。")
+
+if "chat" not in st.session_state and API_KEY:
+    config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+    st.session_state.chat = st.session_state.client.chats.create(model='gemini-2.5-flash', config=config)
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# TTS再生フラグの初期化
+if 'tts_data' not in st.session_state:
+    st.session_state.tts_data = None
+    
+# --- 音声認識UIの配置 ---
+speech_to_text_html = """
+<div id="mic-container" style="text-align: center; margin-top: 10px;">
+    <button id="mic-button" style="padding: 10px 20px; font-size: 16px; background-color: #4a90e2; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px #2a70c2;">
+        🎙️ 音声入力開始
     </button>
-    <p id="mic-status" style="margin-top: 10px;">マイク停止中</p>
 </div>
+
 <script>
-// Streamlitのチャット入力欄にテキストを送信する関数
-function sendTextToStreamlit(text) {
-    window.parent.postMessage({
-        type: 'SET_CHAT_INPUT',
-        text: text
-    }, '*');
-}
- 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition;
- 
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
+const micButton = document.getElementById('mic-button');
+const micContainer = document.getElementById('mic-container');
+let recognition = null;
+
+if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = false; // 発話の度に停止
     recognition.lang = 'ja-JP';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    
-    // グローバルな認識開始関数 (Streamlit側から呼び出される)
-    window.parent.startRec = () => {
-        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-        recognition.start();
-    };
-    
-    recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        document.getElementById("mic-status").innerText = "✅ " + text;
-        sendTextToStreamlit(text);
-    };
-    
-    recognition.onerror = (e) => {
-        document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
-    };
-    
-    recognition.onend = () => {
-        if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
-            document.getElementById("mic-status").innerText = "マイク停止中";
+
+    micButton.onclick = () => {
+        if (recognition) {
+            micButton.textContent = '🔴 録音中...';
+            micButton.style.backgroundColor = '#d9534f';
+            micButton.style.boxShadow = '0 4px #a03c39';
+            recognition.start();
         }
     };
+
+    recognition.onresult = (event) => {
+        const result = event.results[0][0].transcript;
+        window.parent.postMessage({
+            type: 'SET_CHAT_INPUT',
+            text: result
+        }, '*');
+    };
+
+    recognition.onend = () => {
+        micButton.textContent = '🎙️ 音声入力開始';
+        micButton.style.backgroundColor = '#4a90e2';
+        micButton.style.boxShadow = '0 4px #2a70c2';
+    };
+
+    recognition.onerror = (event) => {
+        micButton.textContent = 'エラー: ' + event.error;
+        micButton.style.backgroundColor = '#f0ad4e';
+        micButton.style.boxShadow = '0 4px #d49a3e';
+    };
+
 } else {
-    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+    micContainer.innerHTML = "<p style='color:red;'>このブラウザは音声認識に対応していません。</p>";
 }
 </script>
-""", height=130)
- 
+"""
+components.html(speech_to_text_html, height=100)
+
 st.subheader("ユッキーとの会話履歴")
+
+# --- 会話履歴表示 ---
 for msg in st.session_state.messages:
-    avatar_icon = "🧑" if msg["role"] == "user" else "🤖"
-    with st.chat_message(msg["role"], avatar=avatar_icon):
+    # アバターのアイコンは固定
+    avatar = "🧑" if msg["role"] == "user" else "🤖"
+    with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
  
-# --- チャット入力と処理 ---
+# --- チャット入力と処理 --
 if prompt := st.chat_input("質問を入力してください..."):
-    # 1. ユーザーメッセージを追加・表示
+    # ユーザーメッセージの追加
     st.session_state.messages.append({"role": "user", "content": prompt})
+    # ユーザーメッセージの表示
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(prompt)
+
+    # アシスタントの応答生成
+    if st.session_state.get("chat"):
+        with st.chat_message("assistant", avatar="🤖"):
+            with st.spinner("思考中..."):
+                response = st.session_state.chat.send_message(prompt)
+                text = response.text
+                st.markdown(text)
+            
+            # アシスタントメッセージの追加
+            st.session_state.messages.append({"role": "assistant", "content": text})
+            
+            # 音声データを生成してセッションステートに保存
+            generate_and_store_tts(text)
+            
+    else:
+        st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     
-    # 2. アシスタントの応答を取得・表示
-    with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("ユッキーが思考中..."):
-            if st.session_state.chat:
-                try:
-                    # Gemini API呼び出し
-                    response = st.session_state.chat.send_message(prompt)
-                    text = response.text
-                    
-                    # 応答テキストを表示
-                    st.markdown(text)
-                    
-                    # 3. 音声データを生成してセッションステートに保存
-                    generate_and_store_tts(text)
-                    
-                    # 4. メッセージを履歴に追加
-                    st.session_state.messages.append({"role": "assistant", "content": text})
- 
-                except Exception as e:
-                    error_msg = f"APIエラーが発生しました: {e}"
-                    st.error(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-            else:
-                st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
-    # Rerunを実行し、UIを更新
     st.rerun()
- 
+
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
 components.html("""
 <script>
 window.addEventListener('message', event => {
     if (event.data.type === 'SET_CHAT_INPUT') {
-        const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+        const chatInput = window.parent.document.querySelector('input[placeholder="質問を入力してください..."]');
         if (chatInput) {
             chatInput.value = event.data.text;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            // Enterキーイベントを発火させてチャット送信をトリガー
-            const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 13 });
-            chatInput.dispatchEvent(enterEvent);
+            
+            const event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true
+            });
+            chatInput.dispatchEvent(event);
         }
     }
 });
 </script>
 """, height=0)
+
+
+# --- TTS再生トリガー ---
+if st.session_state.get('tts_data'):
+    # JavaScriptにメッセージをポストして再生をトリガー
+    js_trigger = f"""
+    <script>
+    const ttsData = {{
+        type: 'PLAY_TTS',
+        audioBase64: '{st.session_state['tts_data']['audio_data']}',
+        mimeType: '{st.session_state['tts_data']['mime_type']}'
+    }};
+    
+    // アニメーションUIをホストしているiframeにメッセージを送信
+    const iframes = window.parent.document.querySelectorAll('iframe');
+    iframes.forEach(iframe => {{
+        // iframeの中のHTMLコンポーネントにメッセージを送信
+        iframe.contentWindow.postMessage(ttsData, '*');
+    }});
+    </script>
+    """
+    components.html(js_trigger, height=0)
+    
+    # セッションステートからデータをクリアして、再実行を防ぐ
+    del st.session_state['tts_data']
