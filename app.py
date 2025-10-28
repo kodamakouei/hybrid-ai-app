@@ -35,40 +35,47 @@ except (KeyError, AttributeError):
 # ===============================
 @st.cache_data
 def get_avatar_images():
-    base_names = ["yukki-close", "yukki-open"]
+    base_names = {"close": "yukki-close", "open": "yukki-open"}
     extensions = [".jpg", ".jpeg"]
     loaded_images = {}
     data_uri_prefix = ""
- 
-    # yukki-close と yukki-open の両方が見つかったかどうかを追跡
+    
     found_close = False
     found_open = False
  
-    for base in base_names:
+    for key, base in base_names.items():
         for ext in extensions:
             file_name = base + ext
             try:
-                # ユーザーがアップロードしたファイルをチェック
                 if os.path.exists(file_name):
                     with open(file_name, "rb") as f:
-                        loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
+                        loaded_images[key] = base64.b64encode(f.read()).decode("utf-8")
                         data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
-                        if base == "yukki-close": found_close = True
-                        if base == "yukki-open": found_open = True
+                        if key == "close": found_close = True
+                        if key == "open": found_open = True
                         break
             except FileNotFoundError:
                 continue
  
-    # 両方の画像が見つかった場合のみ、Trueを返す
     if found_close and found_open:
-        return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
-    else:
-        # アバターがない場合のプレースホルダーSVG
-        placeholder_svg = base64.b64encode(
-            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
-        ).decode("utf-8")
-        # プレースホルダーの場合は、両方の画像を同じSVGにし、has_images=Falseを返す
-        return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
+        # 両方の画像が見つかった場合
+        return loaded_images["close"], loaded_images["open"], data_uri_prefix, True, ""
+    
+    # 画像が見つからなかった場合のエラーメッセージ作成
+    missing_files = []
+    if not found_close: missing_files.append("yukki-close.jpg/jpeg")
+    if not found_open: missing_files.append("yukki-open.jpg/jpeg")
+    
+    error_message = f"以下のファイルが見つかりません: {', '.join(missing_files)}"
+
+    # プレースホルダーSVG
+    placeholder_svg = base64.b64encode(
+        f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff5f5"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="#d00" font-family="sans-serif">❌ 画像ロードエラー</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="16" fill="#d00" font-family="sans-serif">両方のファイルが必要です。</text></svg>""".encode('utf-8')
+    ).decode("utf-8")
+    
+    # プレースホルダーの場合は、両方の画像を同じSVGにし、has_images=Falseを返す
+    return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False, error_message
+
  
 # ===============================
 # 音声データ生成とSession State保存（リトライロジック含む）
@@ -139,6 +146,8 @@ header {{ visibility: hidden; }}
     border-radius: 16px;
     object-fit: cover;
     margin: 0 auto;
+    border: 3px solid #ff69b4; /* アバターの境界線を追加 */
+    box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
 }}
 /* stSidebarContentにも幅を適用し、確実に固定 */
 [data-testid="stSidebarContent"] {{
@@ -158,7 +167,7 @@ section[data-testid="stSidebar"] {{
     width: {SIDEBAR_FIXED_WIDTH} !important; /* 再度固定幅を適用 */
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    background-color: #FFFFFF !important;
+    background-color: #f8e7ff !important; /* サイドバーの背景色を少し変える */
 }}
 
 </style>
@@ -183,18 +192,14 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     # --- 変更点1: 画像のデータURIを取得 ---
-    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+    img_close_base64, img_open_base64, data_uri_prefix, has_images, error_message = get_avatar_images()
     
     # 画像がなければ警告を表示
     if not has_images:
-        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg と yukki-open.jpg/jpeg の両方）が見つかりません。")
+        st.error(f"❌ 画像ロードエラー: {error_message}。ファイル名を確認してください。")
  
     # --- 変更点2: アバター画像を表示し、口パク制御JS関数を埋め込む ---
     st.markdown(f"""
-    <style>
-    /* アバターコンポーネントのスタイル */
-    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
-    </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     
     <script>
@@ -203,6 +208,7 @@ with st.sidebar:
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
     
+    // 口パクを開始する関数
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
         // 画像がロードされており、かつ画像が2枚ある場合のみ実行
@@ -215,9 +221,12 @@ with st.sidebar:
                 avatar.src = toggle ? imgOpenBase64 : imgCloseBase64;
                 toggle = !toggle;
             }}, 160); 
+        }} else {{
+            console.error("Avatar images not found or element missing. Lip sync disabled.");
         }}
     }}
     
+    // 口パクを停止する関数
     window.stopTalking = function() {{
         // インターバルを停止
         if (talkingInterval) clearInterval(talkingInterval);
@@ -275,8 +284,10 @@ if st.session_state.audio_to_play:
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
         
-        // --- 変更点3: 再生開始時に口パク開始関数を呼び出す ---
-        if (window.startTalking) window.startTalking();
+        // ★修正点: window.startTalkingが存在するか確認してから呼び出す
+        if (window.startTalking && { 'true' if has_images else 'false' }) {{
+            window.startTalking();
+        }}
         
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
@@ -286,7 +297,7 @@ if st.session_state.audio_to_play:
         audio.autoplay = true;
  
         audio.onended = () => {{ 
-            // --- 変更点4: 再生終了時に口パク停止関数を呼び出す ---
+            // ★修正点: window.stopTalkingが存在するか確認してから呼び出す
             if (window.stopTalking) window.stopTalking(); 
             // URLを解放
             URL.revokeObjectURL(audioUrl);
