@@ -119,12 +119,7 @@ header {{ visibility: hidden; }}
 */
 
 /* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
-[data-testid="stSidebarContent"] > div:first-child {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start; 
-}}
+section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
 .avatar {{ 
     width: 400px; 
     height: 400px;
