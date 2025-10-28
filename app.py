@@ -119,7 +119,12 @@ header {{ visibility: hidden; }}
 */
 
 /* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
-section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
+[data-testid="stSidebarContent"] > div:first-child {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; 
+}}
 .avatar {{ 
     width: 400px; 
     height: 400px;
@@ -130,6 +135,36 @@ section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #
 }}
 </style>
 """, unsafe_allow_html=True)
+
+with st.sidebar:
+    img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
+    st.markdown(f"""
+    <style>
+    section[data-testid="stSidebar"] {{ width: 450px !important; background-color: #FFFFFF !important; }}
+    .main {{ background-color: #FFFFFF !important; }}
+    .st-emotion-cache-1y4p8pa {{ display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }}
+    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
+    </style>
+    <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
+    <script>
+    const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
+    const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
+    let talkingInterval = null;
+    window.startTalking = function() {{
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'}) {{
+            let toggle = false;
+            if (talkingInterval) clearInterval(talkingInterval);
+            talkingInterval = setInterval(() => {{ avatar.src = toggle ? imgOpenBase64 : imgCloseBase64; toggle = !toggle; }}, 160);
+        }}
+    }}
+    window.stopTalking = function() {{
+        if (talkingInterval) clearInterval(talkingInterval);
+        const avatar = document.getElementById('avatar');
+        if ({'true' if has_images else 'false'}) {{ avatar.src = imgCloseBase64; }}
+    }}
+    </script>
+    """, unsafe_allow_html=True)
 
 
 # --- セッションステートの初期化 ---
