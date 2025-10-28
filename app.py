@@ -165,7 +165,7 @@ with st.sidebar:
     <style>
     /* ★★★ お客様が「完璧」と指定されたCSSを再度ここに配置 ★★★ */
     section[data-testid="stSidebar"] {{
-        width: {SIDEBAR_FIXED_WIDTH} !important;
+        width: 450px !important
         min-width: {SIDEBAR_FIXED_WIDTH} !important;
         max-width: {SIDEBAR_FIXED_WIDTH} !important;
         background-color: #FFFFFF !important;
