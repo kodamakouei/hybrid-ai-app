@@ -109,22 +109,22 @@ if "audio_to_play" not in st.session_state:
 
 # --- サイドバーに動画アバターを配置 ---
 with st.sidebar:
-    video_file = "yukki-lipsync.mp4"  # ファイル名を明示的に
+    video_file = "yukki-lipsync.mp4"
     if os.path.exists(video_file):
         with open(video_file, "rb") as f:
             video_base64 = base64.b64encode(f.read()).decode("utf-8")
         video_tag = f"""
-        <video id="yukki_video" width="400" height="400" style="border-radius:16px;display:block;margin:0 auto;" preload="auto">
+        <video id="yukki_video" width="400" height="400" style="border-radius:16px;display:block;margin:0 auto;" preload="auto" muted>
             <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
             このブラウザは動画タグに対応していません。
         </video>
+        <button id="play_btn" style="margin:10px auto;display:block;">▶️ ユッキー再生</button>
         """
         st.markdown(video_tag, unsafe_allow_html=True)
     else:
         st.warning("動画ファイル yukki-lipsync.mp4 が見つかりません。")
-        video_tag = ""
 
-    # 音声再生と動画再生を同時に制御
+    # 音声データがある場合、再生ボタンで動画と音声を同時再生
     if st.session_state.audio_to_play and os.path.exists(video_file):
         js_code = f"""
         <script>
@@ -173,27 +173,29 @@ with st.sidebar:
             return new Blob([buffer], {{ type: 'audio/wav' }});
         }}
 
-        const base64AudioData = '{st.session_state.audio_to_play}';
-        const sampleRate = 24000;
-        const pcmData = base64ToArrayBuffer(base64AudioData);
-        const wavBlob = pcmToWav(pcmData, sampleRate);
-        const audioUrl = URL.createObjectURL(wavBlob);
+        document.getElementById('play_btn').onclick = function() {{
+            const base64AudioData = '{st.session_state.audio_to_play}';
+            const sampleRate = 24000;
+            const pcmData = base64ToArrayBuffer(base64AudioData);
+            const wavBlob = pcmToWav(pcmData, sampleRate);
+            const audioUrl = URL.createObjectURL(wavBlob);
 
-        const audio = new Audio(audioUrl);
-        const video = document.getElementById('yukki_video');
-        if (video) {{
-            video.currentTime = 0;
-            video.play();
-        }}
-        audio.autoplay = true;
-        audio.onended = () => {{
-            if (video) video.pause();
-            URL.revokeObjectURL(audioUrl);
+            const audio = new Audio(audioUrl);
+            const video = document.getElementById('yukki_video');
+            if (video) {{
+                video.currentTime = 0;
+                video.play();
+            }}
+            audio.autoplay = true;
+            audio.onended = () => {{
+                if (video) video.pause();
+                URL.revokeObjectURL(audioUrl);
+            }};
+            audio.play().catch(e => {{
+                if (video) video.pause();
+                URL.revokeObjectURL(audioUrl);
+            }});
         }};
-        audio.play().catch(e => {{
-            if (video) video.pause();
-            URL.revokeObjectURL(audioUrl);
-        }});
         </script>
         """
         components.html(js_code, height=0, width=0)
