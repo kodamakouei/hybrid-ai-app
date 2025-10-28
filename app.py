@@ -44,10 +44,14 @@ def get_avatar_images():
         for ext in extensions:
             file_name = base + ext
             try:
-                with open(file_name, "rb") as f:
-                    loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
-                    data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
-                    break
+                # ユーザーがアップロードしたファイルをチェック
+                if os.path.exists(file_name):
+                    with open(file_name, "rb") as f:
+                        loaded_images[base] = base64.b64encode(f.read()).decode("utf-8")
+                        data_uri_prefix = f"data:image/{'jpeg' if ext in ['.jpg', '.jpeg'] else 'png'};base64,"
+                        break
+                # Streamlitのメディアファイルとしてもチェック（ただしローカル実行の場合は上記で十分）
+                # ここではローカルファイルを優先
             except FileNotFoundError:
                 continue
  
@@ -68,7 +72,7 @@ def generate_and_store_tts(text):
     if not API_KEY:
         st.session_state.audio_to_play = None
         return
-       
+        
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
@@ -81,6 +85,7 @@ def generate_and_store_tts(text):
  
     for attempt in range(MAX_RETRIES):
         try:
+            # TTS APIには遅延があるため、リトライと指数バックオフを適用
             response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
             response.raise_for_status()
             result = response.json()
@@ -100,7 +105,7 @@ def generate_and_store_tts(text):
         except Exception as e:
             print(f"Error generating TTS: {e}")
             break
-           
+            
     st.session_state.audio_to_play = None
  
 # ===============================
@@ -114,13 +119,9 @@ st.markdown(f"""
 /* Streamlitのヘッダー/トップバーを非表示にする（任意） */
 header {{ visibility: hidden; }}
  
-/* ★★★ レイアウト変更CSSの削除 ★★★
-.stApp に対する margin-left の設定を削除し、Streamlitのデフォルトレイアウトに依存させる。
-*/
- 
-/* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
+/* ★修正点1: stSidebarContent直下の要素のwidthにセミコロンを追加し、CSS構文エラーを修正 */
 [data-testid="stSidebarContent"] > div:first-child {{
-    width: 450px !important;
+    width: {SIDEBAR_FIXED_WIDTH} !important; /* セミコロンを追加 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -131,8 +132,18 @@ header {{ visibility: hidden; }}
     height: 400px;
     border-radius: 16px;
     object-fit: cover;
-    /* お客様が以前指定されたCSSを維持 */
     margin: 0 auto;
+}}
+/* ★修正点2: stSidebarContentにも幅を適用し、確実に固定 */
+[data-testid="stSidebarContent"] {{
+    width: {SIDEBAR_FIXED_WIDTH} !important;
+    min-width: {SIDEBAR_FIXED_WIDTH} !important;
+    max-width: {SIDEBAR_FIXED_WIDTH} !important;
+}}
+
+/* --- 追加: サイドバーの開閉ボタン（<<マーク）を非表示にする --- */
+[data-testid="stSidebarCollapseButton"] {{
+    display: none !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -144,6 +155,7 @@ if "client" not in st.session_state:
 if "chat" not in st.session_state:
     if st.session_state.client:
         config = {"system_instruction": SYSTEM_PROMPT, "temperature": 0.2}
+        # Chat Sessionを初期化する際に、configを渡す
         st.session_state.chat = st.session_state.client.chats.create(model="gemini-2.5-flash", config=config)
     else:
         st.session_state.chat = None
@@ -155,7 +167,7 @@ if "audio_to_play" not in st.session_state:
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
-   
+    
     # 画像がなければ警告を表示
     if not has_images:
         st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
@@ -163,30 +175,28 @@ with st.sidebar:
     # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
     <style>
-    /* ★★★ お客様が「完璧」と指定されたCSSを再度ここに配置 ★★★ */
+    /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
+    /* サイドバーコンテナ自体を固定 */
     section[data-testid="stSidebar"] {{
-        width: 450px !important;
+        width: {SIDEBAR_FIXED_WIDTH} !important;
         min-width: {SIDEBAR_FIXED_WIDTH} !important;
         max-width: {SIDEBAR_FIXED_WIDTH} !important;
         background-color: #FFFFFF !important;
     }}
-    .main {{ background-color: #FFFFFF !important; }}
-    .st-emotion-cache-1y4p8pa {{
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-    }}
+    /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
+    .main {{ background-color: #FFFFFF !important; }} 
+    
+    /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
-   
+    
     <script>
+    // 口パク制御用のJavaScript
     const imgCloseBase64 = "{data_uri_prefix}{img_close_base64}";
     const imgOpenBase64 = "{data_uri_prefix}{img_open_base64}";
     let talkingInterval = null;
-   
+    
     window.startTalking = function() {{
         const avatar = document.getElementById('avatar');
         if ({'true' if has_images else 'false'} && avatar) {{
@@ -198,7 +208,7 @@ with st.sidebar:
             }}, 160);
         }}
     }}
-   
+    
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
         const avatar = document.getElementById('avatar');
@@ -253,33 +263,43 @@ if st.session_state.audio_to_play:
         // --- 再生ロジック ---
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
-       
+        
+        // 口パク開始
         if (window.startTalking) window.startTalking();
-       
+        
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
         const audioUrl = URL.createObjectURL(wavBlob);
-       
+        
         const audio = new Audio(audioUrl);
         audio.autoplay = true;
  
-        audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
+        audio.onended = () => {{ 
+            // 口パク終了
+            if (window.stopTalking) window.stopTalking(); 
+            // URLを解放
+            URL.revokeObjectURL(audioUrl);
+        }};
         audio.play().catch(e => {{
             console.error("Audio playback failed:", e);
+            // エラー時も口パク終了
             if (window.stopTalking) window.stopTalking();
+            URL.revokeObjectURL(audioUrl);
         }});
     </script>
     """
+    # height=0, width=0のカスタムコンポーネントでスクリプトを実行
     components.html(js_code, height=0, width=0)
     # 再生トリガー実行後、データをクリア
     st.session_state.audio_to_play = None
  
 # --- メインコンテンツ ---
-st.title("🎀 ユッキー")
+st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
  
 # 音声認識ボタンとチャット履歴の表示
 st.subheader("音声入力")
+# StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
 components.html("""
 <div id="mic-container" style="padding: 10px 0;">
     <button onclick="window.parent.startRec()"
@@ -305,23 +325,23 @@ if (SpeechRecognition) {
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
-   
+    
     // グローバルな認識開始関数 (Streamlit側から呼び出される)
     window.parent.startRec = () => {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     };
-   
+    
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
         sendTextToStreamlit(text);
     };
-   
+    
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
-   
+    
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
@@ -343,7 +363,7 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("質問を入力してください..."):
     # 1. ユーザーメッセージを追加・表示
     st.session_state.messages.append({"role": "user", "content": prompt})
-   
+    
     # 2. アシスタントの応答を取得・表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
@@ -352,13 +372,13 @@ if prompt := st.chat_input("質問を入力してください..."):
                     # Gemini API呼び出し
                     response = st.session_state.chat.send_message(prompt)
                     text = response.text
-                   
+                    
                     # 応答テキストを表示
                     st.markdown(text)
-                   
+                    
                     # 3. 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
-                   
+                    
                     # 4. メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
  
@@ -368,7 +388,7 @@ if prompt := st.chat_input("質問を入力してください..."):
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-   
+    
     # Rerunを実行し、UIを更新
     st.rerun()
  
@@ -388,5 +408,3 @@ window.addEventListener('message', event => {
 });
 </script>
 """, height=0)
- 
- 
