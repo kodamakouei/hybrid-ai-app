@@ -1,8 +1,13 @@
+import io
+import wave
+import base64
+# 追加のimport
 import streamlit as st
-from google import genai
-import base64, json, time, requests
 import streamlit.components.v1 as components
-
+from google import genai
+import json
+import time
+import requests
 # ===============================
 # 設定
 # ===============================
@@ -22,6 +27,17 @@ API_KEY = st.secrets["GEMINI_API_KEY"]
 # ===============================
 # 音声再生
 # ===============================
+def pcm16_base64_to_wav_bytesio(b64_pcm, sample_rate=24000, channels=1, sampwidth=2):
+    pcm = base64.b64decode(b64_pcm)
+    wav_io = io.BytesIO()
+    with wave.open(wav_io, 'wb') as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+    wav_io.seek(0)
+    return wav_io
+
 def base64_to_audio_url(base64_data, sample_rate):
     js_code = f"""
     <script>
