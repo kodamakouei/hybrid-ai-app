@@ -21,16 +21,14 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
-# ★お客様の指定により、レイアウトは以下の固定幅CSSで制御します。
+# ★お客様が指定したCSSに合わせて設定を調整
 SIDEBAR_FIXED_WIDTH = "450px" 
 
 # --- APIキーの読み込み ---
 try:
-    # try/exceptブロックを簡潔に修正
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except (KeyError, AttributeError):
     API_KEY = ""
-    # Streamlitのwarningは、サイドバーアバター描画後に表示されるように調整
 
 # ===============================
 # アバター画像取得 (キャッシュ)
@@ -58,7 +56,7 @@ def get_avatar_images():
     else:
         # アバターがない場合のプレースホルダーSVG
         placeholder_svg = base64.b64encode(
-            f"""<svg width="{SIDEBAR_FIXED_WIDTH}" height="{SIDEBAR_FIXED_WIDTH}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
+            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
  
@@ -96,10 +94,11 @@ def generate_and_store_tts(text):
             if response.status_code in [429, 503] and attempt < MAX_RETRIES - 1:
                 time.sleep(2 ** attempt)
                 continue
-            st.error(f"❌ APIエラーが発生しました (HTTP {response.status_code})。詳細: {e}")
+            # 最終試行または他のエラー
+            print(f"API Error (HTTP {response.status_code}) or final attempt failed: {e}")
             break
         except Exception as e:
-            st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
+            print(f"Error generating TTS: {e}")
             break
             
     st.session_state.audio_to_play = None
@@ -109,56 +108,29 @@ def generate_and_store_tts(text):
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
 
-# --- グローバルCSSの適用 (お客様指定のレイアウトを反映) ---
+# --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
 st.markdown(f"""
 <style>
 /* Streamlitのヘッダー/トップバーを非表示にする（任意） */
 header {{ visibility: hidden; }}
 
-/* サイドバーのスタイルと固定位置 */
-section[data-testid="stSidebar"] {{ 
-    /* ★お客様の指定の固定幅 */
-    width: {SIDEBAR_FIXED_WIDTH} !important;
-    min-width: {SIDEBAR_FIXED_WIDTH} !important;
-    max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    background-color: #FFFFFF !important;
-    height: 100vh;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-    z-index: 1000;
-    position: fixed !important;
-    left: 0;
-    top: 0;
-    display: block !important;
-    padding-left: 1rem !important; 
-    padding-right: 1rem !important; 
-    padding-top: 20px; 
-    box-sizing: border-box; 
-}}
+/* ★★★ レイアウト変更CSSの削除 ★★★
+.stApp に対する margin-left の設定を削除し、Streamlitのデフォルトレイアウトに依存させる。
+*/
 
-/* メインコンテンツのコンテナ（stApp）に左マージンを設定し、隙間を作る */
-/* お客様のCSSではマージン設定がなかったため、アバター画像サイズとpaddingから約470pxと推測 */
-.stApp {{
-    /* サイドバーの幅 + 隙間 (約20pxを確保) */
-    margin-left: calc({SIDEBAR_FIXED_WIDTH} + 20px) !important; 
-    padding-top: 1rem;
-}}
-
-/* サイドバー内のアバターを中央に配置 */
+/* サイドバー内のアバターを中央に配置するためのCSS (お客様のコードを維持し、一部整理) */
 [data-testid="stSidebarContent"] > div:first-child {{
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start; 
-    padding-top: 50px; 
 }}
 .avatar {{ 
-    /* お客様の指定サイズを適度にレスポンシブに調整 */
-    max-width: 90%; 
-    height: auto;
+    width: 400px; 
+    height: 400px;
     border-radius: 16px;
     object-fit: cover;
-    border: 5px solid #ff69b4;
-    box-shadow: 0 4px 10px rgba(255,105,180,0.5);
+    /* お客様が以前指定されたCSSを維持 */
     margin: 0 auto; 
 }}
 </style>
@@ -187,8 +159,26 @@ with st.sidebar:
     if not has_images:
         st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
 
-    # HTML/JSによるアバターの描画と口パク制御関数の定義
+    # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
+    <style>
+    /* ★★★ お客様が「完璧」と指定されたCSSを再度ここに配置 ★★★ */
+    section[data-testid="stSidebar"] {{ 
+        width: {SIDEBAR_FIXED_WIDTH} !important; 
+        min-width: {SIDEBAR_FIXED_WIDTH} !important;
+        max-width: {SIDEBAR_FIXED_WIDTH} !important;
+        background-color: #FFFFFF !important; 
+    }}
+    .main {{ background-color: #FFFFFF !important; }}
+    .st-emotion-cache-1y4p8pa {{ 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: center; 
+        height: 100vh; 
+    }}
+    .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
+    </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     
     <script>
@@ -223,7 +213,7 @@ if st.session_state.audio_to_play:
     # WAV変換ヘルパー関数を定義したJavaScriptコードを挿入
     js_code = f"""
     <script>
-        // --- PCM to WAV Utility Functions (お客様のコードには欠けていた部分) ---
+        // --- PCM to WAV Utility Functions ---
         function base64ToArrayBuffer(base64) {{
             const binary_string = window.atob(base64);
             const len = binary_string.length;
