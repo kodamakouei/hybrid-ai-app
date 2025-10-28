@@ -145,12 +145,6 @@ header {{ visibility: hidden; }}
 [data-testid="stSidebarCollapseButton"] {{
     display: none !important;
 }}
-
-/* --- 追加: サイドバーの横スクロールバーを非表示にする --- */
-section[data-testid="stSidebar"] {{
-    overflow-x: hidden !important; /* 横方向のスクロールを非表示 */
-}}
-
 </style>
 """, unsafe_allow_html=True)
  
@@ -188,7 +182,6 @@ with st.sidebar:
         min-width: {SIDEBAR_FIXED_WIDTH} !important;
         max-width: {SIDEBAR_FIXED_WIDTH} !important;
         background-color: #FFFFFF !important;
-        overflow-x: hidden !important; /* 再度、横スクロールを抑制（念のため） */
     }}
     /* メインコンテンツの背景色はメインのコンテナに適用するが、幅の固定とは無関係 */
     .main {{ background-color: #FFFFFF !important; }} 
