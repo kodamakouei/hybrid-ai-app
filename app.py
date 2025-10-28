@@ -26,6 +26,8 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
+# サイドバーの幅をこの値に合わせて調整
+SIDEBAR_WIDTH = "450px"
 
 # --- APIキーの読み込み ---
 try:
@@ -179,6 +181,65 @@ def generate_and_play_tts(text):
 # ===============================
 st.set_page_config(page_title="ユッキー（Vtuber風AIアシスタント）", layout="wide")
 
+# --- グローバルCSSの適用 ---
+# StreamlitのデフォルトCSSをオーバーライドし、サイドバーとメインコンテンツのレイアウトを調整
+st.markdown(f"""
+<style>
+/* Streamlitのヘッダー/トップバーを非表示にする（任意） */
+header {{ visibility: hidden; }}
+
+/* サイドバーの幅と固定位置を設定 */
+section[data-testid="stSidebar"] {{ 
+    width: {SIDEBAR_WIDTH} !important; 
+    min-width: {SIDEBAR_WIDTH} !important;
+    max-width: {SIDEBAR_WIDTH} !important; 
+    background-color: #FFFFFF !important; 
+    height: 100vh;
+    padding-top: 20px;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    z-index: 1000;
+}}
+
+/* メインコンテンツのコンテナにサイドバーの幅だけ左マージンを設定し、横に並ぶようにする */
+/* stAppのラッパーを調整 */
+.stApp {{
+    /* Streamlitのメインコンテンツのラッパー */
+    margin-left: {SIDEBAR_WIDTH};
+    padding-left: 1rem; /* 必要に応じて調整 */
+    padding-right: 1rem;
+    padding-top: 1rem;
+}}
+
+/* アバターを中央に配置 */
+/* st-emotion-cache-1y4p8pa は st.sidebar 内のコンテナ（古いCSSセレクタの可能性もあるため念のため残すが、新しいStreamlitでは不要かも） */
+/* .st-emotion-cache-1y4p8pa {{ 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: flex-start; 
+    height: auto;
+    padding-top: 50px;
+}} */
+/* st-emotion-cache-vk3ypz は新しいStreamlitのSidebar内のコンテナ */
+[data-testid="stSidebarContent"] > div:first-child {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 50px;
+}}
+.avatar {{ 
+    width: 400px; 
+    height: 400px; 
+    border-radius: 16px; 
+    object-fit: cover; 
+    border: 5px solid #ff69b4; 
+    box-shadow: 0 4px 10px rgba(255,105,180,0.5); 
+}}
+</style>
+""", unsafe_allow_html=True)
+
+
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
     st.session_state.client = genai.Client(api_key=API_KEY) if API_KEY else None
@@ -195,41 +256,8 @@ if "messages" not in st.session_state:
 with st.sidebar:
     img_close_base64, img_open_base64, data_uri_prefix, has_images = get_avatar_images()
     
-    # CSSとHTML/JSによるアバターの描画と口パク制御関数の定義
+    # HTML/JSによるアバターの描画と口パク制御関数の定義
     st.markdown(f"""
-    <style>
-    /* サイドバーの幅を広げてアバターを配置 */
-    section[data-testid="stSidebar"] {{ 
-        width: 450px !important; 
-        background-color: #FFFFFF !important; 
-        /* 画面左上に固定されるように設定 */
-        position: fixed !important; 
-        top: 0; 
-        left: 0;
-        height: 100vh;
-        padding-top: 20px;
-        box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-        z-index: 1000;
-    }}
-    .main {{ background-color: #FFFFFF !important; }}
-    /* アバターを中央に配置 */
-    .st-emotion-cache-1y4p8pa {{ 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: flex-start; /* 上部に寄せる */
-        height: auto;
-        padding-top: 50px;
-    }}
-    .avatar {{ 
-        width: 400px; 
-        height: 400px; 
-        border-radius: 16px; 
-        object-fit: cover; 
-        border: 5px solid #ff69b4; /* 可愛いピンクの縁取り */
-        box-shadow: 0 4px 10px rgba(255,105,180,0.5); /* 影を付けて立体感を出す */
-    }}
-    </style>
     <img id="avatar" src="{data_uri_prefix}{img_close_base64}" class="avatar">
     
     <script>
@@ -240,7 +268,9 @@ with st.sidebar:
     
     // グローバルな口パク開始関数
     window.startTalking = function() {{
-        const avatar = window.parent.document.getElementById('avatar');
+        // window.parent.document.getElementById('avatar') ではなく、
+        // Streamlitのコンポーネント内で直接要素を取得するように変更（安全のため）
+        const avatar = document.getElementById('avatar'); 
         if ({'true' if has_images else 'false'} && avatar) {{
             let toggle = false;
             if (talkingInterval) clearInterval(talkingInterval);
@@ -254,7 +284,7 @@ with st.sidebar:
     // グローバルな口パク停止関数
     window.stopTalking = function() {{
         if (talkingInterval) clearInterval(talkingInterval);
-        const avatar = window.parent.document.getElementById('avatar');
+        const avatar = document.getElementById('avatar'); 
         if ({'true' if has_images else 'false'} && avatar) {{ 
             avatar.src = imgCloseBase64; 
         }}
