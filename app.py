@@ -28,6 +28,23 @@ except Exception:
 # --- 共通設定 ---
 # -----------------------------------------------------
 
+def generate_and_store_tts(text):
+    if not API_KEY:
+        return
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {"responseModalities": ["AUDIO"]},
+        "model": TTS_MODEL
+    }
+    headers = {'Content-Type': 'application/json'}
+    try:
+        response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
+        response.raise_for_status()
+        result = response.json()
+        st.session_state.audio_to_play = result["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+    except Exception as e:
+        st.error(f"❌ 音声データ取得に失敗しました。詳細: {e}")
+
 # ===============================
 # アバター画像取得 (キャッシュ)
 # ===============================
@@ -69,7 +86,18 @@ if "chat" not in st.session_state:
         st.session_state.chat = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "audio_to_play" not in st.session_state:
+if st.session_state.audio_to_play:
+    st.sidebar.markdown(f"""
+    <script>
+    if (window.startTalking) window.startTalking();
+    const audio = new Audio('data:audio/wav;base64,{st.session_state.audio_to_play}');
+    audio.autoplay = true;
+    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
+    audio.play().catch(e => {{
+        if (window.stopTalking) window.stopTalking();
+    }});
+    </script>
+    """, unsafe_allow_html=True)
     st.session_state.audio_to_play = None
 
 # --- サイドバーにアバターと関連要素を配置 ---
@@ -311,7 +339,7 @@ if prompt := st.chat_input("質問を入力してください..."):
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-        generate_and_play_tts(text)
+        generate_and_store_tts(text)  # ここを変更
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     st.rerun()
