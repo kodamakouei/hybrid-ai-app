@@ -22,7 +22,7 @@ TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
 # ★お客様が指定したCSSに合わせて設定を調整
-SIDEBAR_FIXED_WIDTH = "450px"
+SIDEBAR_FIXED_WIDTH = "1000px"
  
 # --- APIキーの読み込み ---
 try:
@@ -165,7 +165,7 @@ with st.sidebar:
     <style>
     /* ★★★ お客様が「完璧」と指定されたCSSを再度ここに配置 ★★★ */
     section[data-testid="stSidebar"] {{
-        width: 450px !important
+        width: {SIDEBAR_FIXED_WIDTH} !important;
         min-width: {SIDEBAR_FIXED_WIDTH} !important;
         max-width: {SIDEBAR_FIXED_WIDTH} !important;
         background-color: #FFFFFF !important;
