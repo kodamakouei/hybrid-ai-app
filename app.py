@@ -26,8 +26,8 @@ TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
 MAX_RETRIES = 5
-# サイドバーの幅をこの値に合わせて調整 (画面幅の約1/3に設定)
-SIDEBAR_WIDTH = "33%" # 変更点: 固定ピクセルから割合へ
+# サイドバーの幅をこの値に合わせて調整 (画面幅の約1/4に設定)
+SIDEBAR_WIDTH = "25%" # 修正点: 33%から25%に変更
 
 # --- APIキーの読み込み ---
 try:
