@@ -18,6 +18,7 @@ SYSTEM_PROMPT = """
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 TTS_VOICE = "Kore"
+MAX_RETRIES = 5
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except Exception:
@@ -26,10 +27,6 @@ except Exception:
 # -----------------------------------------------------
 # --- 共通設定 ---
 # -----------------------------------------------------
-TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
-TTS_MODEL = "gemini-2.5-flash-preview-tts"
-TTS_VOICE = "Kore"
-MAX_RETRIES = 5
 
 # ===============================
 # アバター画像取得 (キャッシュ)
@@ -60,8 +57,6 @@ def get_avatar_images():
             f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">❌画像なし</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
-
-
 
 # --- セッションステートの初期化 ---
 if "client" not in st.session_state:
@@ -123,7 +118,7 @@ def base64_to_audio_url(base64_data, sample_rate):
             }}
             return bytes.buffer;
         }}
- 
+
         function pcmToWav(pcmData, sampleRate) {{
             const numChannels = 1;
             const bitsPerSample = 16;
@@ -134,7 +129,7 @@ def base64_to_audio_url(base64_data, sample_rate):
             const buffer = new ArrayBuffer(44 + dataSize);
             const view = new DataView(buffer);
             let offset = 0;
- 
+
             writeString(view, offset, 'RIFF'); offset += 4;
             view.setUint32(offset, 36 + dataSize, true); offset += 4;
             writeString(view, offset, 'WAVE'); offset += 4;
@@ -148,7 +143,7 @@ def base64_to_audio_url(base64_data, sample_rate):
             view.setUint16(offset, bitsPerSample, true); offset += 2;
             writeString(view, offset, 'data'); offset += 4;
             view.setUint32(offset, dataSize, true); offset += 4;
- 
+
             const pcm16 = new Int16Array(pcmData);
             for (let i = 0; i < pcm16.length; i++) {{
                 view.setInt16(offset, pcm16[i], true);
@@ -156,13 +151,13 @@ def base64_to_audio_url(base64_data, sample_rate):
             }}
             return new Blob([buffer], {{ type: 'audio/wav' }});
         }}
- 
+
         function writeString(view, offset, string) {{
             for (let i = 0; i < string.length; i++) {{
                 view.setUint8(offset + i, string.charCodeAt(i));
             }}
         }}
- 
+
         const pcmData = base64ToArrayBuffer('{base64_data}');
         const wavBlob = pcmToWav(pcmData, {sample_rate});
         const audioUrl = URL.createObjectURL(wavBlob);
@@ -171,8 +166,7 @@ def base64_to_audio_url(base64_data, sample_rate):
     </script>
     """
     components.html(js_code, height=0, width=0)
- 
- 
+
 def generate_and_play_tts(text):
     """Gemini TTSで音声生成＋自動再生"""
     payload = {
@@ -183,9 +177,9 @@ def generate_and_play_tts(text):
         },
         "model": TTS_MODEL,
     }
- 
+
     headers = {'Content-Type': 'application/json'}
- 
+
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.post(f"{TTS_API_URL}?key={API_KEY}", headers=headers, data=json.dumps(payload))
@@ -214,8 +208,7 @@ def generate_and_play_tts(text):
             st.error(f"予期せぬエラー: {e}")
             return False
     return False
- 
- 
+
 # -----------------------------------------------------
 # --- 音声入力UI（Web Speech API） ---
 # -----------------------------------------------------
@@ -229,13 +222,13 @@ def speech_to_text_ui():
     let recognizing = false;
     let recognition;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
- 
+
     if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = false;
         recognition.continuous = false;
- 
+
         function startRecognition() {
             if (!recognizing) {
                 recognizing = true;
@@ -247,7 +240,7 @@ def speech_to_text_ui():
                 document.getElementById('mic-status').innerText = 'マイク停止中';
             }
         }
- 
+
         recognition.onresult = function(event) {
             const transcript = event.results[0][0].transcript;
             const streamlitInput = window.parent.document.querySelector('input[data-testid="stChatInput"]');
@@ -258,7 +251,7 @@ def speech_to_text_ui():
             }
             document.getElementById('mic-status').innerText = '✅ 認識完了: ' + transcript;
         };
- 
+
         recognition.onerror = function(event) {
             document.getElementById('mic-status').innerText = '⚠️ エラー: ' + event.error;
         };
@@ -266,7 +259,7 @@ def speech_to_text_ui():
         document.getElementById('mic-status').innerText = 'このブラウザは音声認識をサポートしていません。';
     }
     </script>
- 
+
     <button onclick="startRecognition()">🎤 話す / 停止</button>
     <p id="mic-status">マイク停止中</p>
     """
@@ -318,7 +311,7 @@ if prompt := st.chat_input("質問を入力してください..."):
         response = st.session_state.chat.send_message(prompt)
         text = response.text
         st.session_state.messages.append({"role": "assistant", "content": text})
-        generate_and_store_tts(text)
+        generate_and_play_tts(text)
     else:
         st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
     st.rerun()
