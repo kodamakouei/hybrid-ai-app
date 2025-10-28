@@ -299,59 +299,66 @@ st.caption("知識は答え、思考は解法ガイドのみを返します。")
  
 # 音声認識ボタンとチャット履歴の表示
 st.subheader("音声入力")
-# StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
 components.html("""
 <div id="mic-container" style="padding: 10px 0;">
-    <button onclick="window.parent.startRec()"
+    <button id="startButton"
             style="background-color: #ff69b4; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         🎙 話す
     </button>
     <p id="mic-status" style="margin-top: 10px;">マイク停止中</p>
 </div>
+
 <script>
-// Streamlitのチャット入力欄にテキストを送信する関数
-function sendTextToStreamlit(text) {
-    window.parent.postMessage({
-        type: 'SET_CHAT_INPUT',
-        text: text
-    }, '*');
-}
- 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition;
- 
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'ja-JP';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    
-    // グローバルな認識開始関数 (Streamlit側から呼び出される)
-    window.parent.startRec = () => {
-        document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
-        recognition.start();
-    };
-    
-    recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        document.getElementById("mic-status").innerText = "✅ " + text;
-        sendTextToStreamlit(text);
-    };
-    
-    recognition.onerror = (e) => {
-        document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
-    };
-    
-    recognition.onend = () => {
-        if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
-            document.getElementById("mic-status").innerText = "マイク停止中";
-        }
-    };
+if (!SpeechRecognition) {
+  document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
 } else {
-    document.getElementById("mic-container").innerHTML = "このブラウザは音声認識に対応していません。";
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  const startBtn = document.getElementById("startButton");
+  const statusEl = document.getElementById("mic-status");
+
+  startBtn.onclick = () => {
+    statusEl.innerText = "🎧 聴き取り中...";
+    recognition.start();
+  };
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    statusEl.innerText = "✅ " + text;
+
+    // Streamlitのチャット欄に直接入力して送信
+    const chatInput = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+    if (chatInput) {
+      chatInput.value = text;
+      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+      // Enterキーを送信（keydown→keyup 両方）
+      const keyDown = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      const keyUp = new KeyboardEvent('keyup', { key: 'Enter', bubbles: true });
+      chatInput.dispatchEvent(keyDown);
+      chatInput.dispatchEvent(keyUp);
+    } else {
+      console.log("❌ チャット入力欄が見つかりません");
+    }
+  };
+
+  recognition.onerror = (e) => {
+    statusEl.innerText = "⚠️ エラー: " + e.error;
+  };
+
+  recognition.onend = () => {
+    if (statusEl.innerText.includes("聴き取り中")) {
+      statusEl.innerText = "マイク停止中";
+    }
+  };
 }
 </script>
 """, height=130)
+
  
 st.subheader("ユッキーとの会話履歴")
 for msg in st.session_state.messages:
