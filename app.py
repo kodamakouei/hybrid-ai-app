@@ -136,19 +136,6 @@ with st.sidebar:
         """, unsafe_allow_html=True)
         st.session_state.audio_to_play = None
 
-if st.session_state.audio_to_play:
-    st.sidebar.markdown(f"""
-    <script>
-    if (window.startTalking) window.startTalking();
-    const audio = new Audio('data:audio/wav;base64,{st.session_state.audio_to_play}');
-    audio.autoplay = true;
-    audio.onended = () => {{ if (window.stopTalking) window.stopTalking(); }};
-    audio.play().catch(e => {{
-        if (window.stopTalking) window.stopTalking();
-    }});
-    </script>
-    """, unsafe_allow_html=True)
-    st.session_state.audio_to_play = None
 
 # -----------------------------------------------------
 # --- 音声を自動再生するための関数 ---
