@@ -37,7 +37,7 @@ except (KeyError, AttributeError):
 @st.cache_data
 def get_avatar_images():
     base_names = ["yukki-", "yukki-"]
-    extensions = [".jpg", ".jpeg"]
+    extensions = [".jpg", ".jpeg","png"]
     loaded_images = {}
     data_uri_prefix = ""
  
