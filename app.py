@@ -3,6 +3,7 @@ from google import genai
 import base64, json, requests
 import streamlit.components.v1 as components
 import os
+from pathlib import Path
 import time
  
 # ===============================
@@ -112,6 +113,20 @@ def generate_and_store_tts(text):
 # Streamlit UI
 # ===============================
 st.set_page_config(page_title="ユッキー", layout="wide")
+
+# --- カスタムCSSの読み込み ---
+try:
+    css_path = Path(__file__).parent / "style.css"
+    if css_path.exists():
+        with open(css_path, "r", encoding="utf-8") as f:
+            css_text = f.read()
+        # Streamlit に直接 style を埋め込んで適用
+        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    else:
+        st.sidebar.info("style.css が見つかりません（読み込みスキップ）。")
+except Exception as e:
+    # CSS読み込みに失敗してもUIは続行
+    st.sidebar.warning(f"CSS 読み込み時にエラーが発生しました: {e}")
  
 # --- グローバルCSSの適用 (レイアウト崩れを防ぐため、最低限の調整のみ残す) ---
 st.markdown(f"""
