@@ -36,7 +36,7 @@ except (KeyError, AttributeError):
 # ===============================
 @st.cache_data
 def get_avatar_images():
-    base_names = ["yukki-close", "yukki-open"]
+    base_names = ["yukki-", "yukki-"]
     extensions = [".jpg", ".jpeg"]
     loaded_images = {}
     data_uri_prefix = ""
@@ -56,8 +56,8 @@ def get_avatar_images():
             except FileNotFoundError:
                 continue
  
-    if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
-        return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
+    if "yukki-" in loaded_images and "yukki-" in loaded_images:
+        return loaded_images["yukki-"], loaded_images["yukki-"], data_uri_prefix, True
     else:
         # アバターがない場合のプレースホルダーSVG
         placeholder_svg = base64.b64encode(
