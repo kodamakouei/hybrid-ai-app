@@ -15,7 +15,6 @@ SYSTEM_PROMPT = """
 1️⃣ 知識・定義は直接答える。
 2️⃣ 思考・計算問題は答えを教えず、解法のヒントのみ。
 3️⃣ 途中式を見せられた場合は正誤を判定し、優しく導く。
-あなたは小学生低学年の先生です。
 """
 # --- 共通設定 ---
 TTS_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
@@ -36,8 +35,8 @@ except (KeyError, AttributeError):
 # ===============================
 @st.cache_data
 def get_avatar_images():
-    base_names = ["yukki-", "yukki-"]
-    extensions = [".jpg", ".jpeg","png"]
+    base_names = ["yukki-close", "yukki-open"]
+    extensions = [".jpg", ".jpeg"]
     loaded_images = {}
     data_uri_prefix = ""
  
@@ -56,12 +55,12 @@ def get_avatar_images():
             except FileNotFoundError:
                 continue
  
-    if "yukki-" in loaded_images and "yukki-" in loaded_images:
-        return loaded_images["yukki-"], loaded_images["yukki-"], data_uri_prefix, True
+    if "yukki-close" in loaded_images and "yukki-open" in loaded_images:
+        return loaded_images["yukki-close"], loaded_images["yukki-open"], data_uri_prefix, True
     else:
         # アバターがない場合のプレースホルダーSVG
         placeholder_svg = base64.b64encode(
-            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-.png</text></svg>""".encode('utf-8')
+            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
  
@@ -171,7 +170,7 @@ with st.sidebar:
    
     # 画像がなければ警告を表示
     if not has_images:
-        st.warning("⚠️ アバター画像ファイル（yukki-.png, yukk-.png）が見つかりません。")
+        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
  
     # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
