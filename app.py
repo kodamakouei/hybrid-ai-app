@@ -61,7 +61,7 @@ def get_avatar_images():
     else:
         # アバターがない場合のプレースホルダーSVG
         placeholder_svg = base64.b64encode(
-            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-close/open.jpg/jpeg</text></svg>""".encode('utf-8')
+            f"""<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f8e7ff"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="28" fill="#a00" font-family="sans-serif">❌画像なし</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#a00" font-family="sans-serif">yukki-.png</text></svg>""".encode('utf-8')
         ).decode("utf-8")
         return placeholder_svg, placeholder_svg, "data:image/svg+xml;base64,", False
  
@@ -171,7 +171,7 @@ with st.sidebar:
    
     # 画像がなければ警告を表示
     if not has_images:
-        st.warning("⚠️ アバター画像ファイル（yukki-close.jpg/jpeg, yukki-open.jpg/jpeg）が見つかりません。")
+        st.warning("⚠️ アバター画像ファイル（yukki-.png, yukk-.png）が見つかりません。")
  
     # お客様が提示されたサイドバーのレイアウトCSSとアバターを描画
     st.markdown(f"""
