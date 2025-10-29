@@ -294,7 +294,7 @@ if st.session_state.audio_to_play:
     st.session_state.audio_to_play = None
  
 # --- メインコンテンツ ---
-st.title("🎀 ユッキー（Vtuber風AIアシスタント）")
+st.title("🎀 ユッキー（疑似教師風）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
  
 # 音声認識ボタンとチャット履歴の表示
