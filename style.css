@@ -43,3 +43,63 @@ div[data-testid="stChatInputContainer"] {
     border-top: 1px solid #e6e6e6;
 }
 
+/* --- モバイル対応: スマホ幅でアバターを上部にしてコンテンツをフル幅化 --- */
+@media (max-width: 768px) {
+    /* 左側に固定していたアバター領域を上部に折りたたむ */
+    .avatar-container {
+        position: relative;
+        left: auto;
+        top: auto;
+        width: 100%;
+        height: auto;
+        padding: 0.75rem 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        background: transparent;
+    }
+    .avatar {
+        width: 160px;
+        height: 160px;
+        border-radius: 12px;
+        margin: 0.25rem 0;
+    }
+
+    /* コンテンツ領域はフル幅にして左右の余白を小さくする */
+    .content-container {
+        margin-left: 0; /* 左側の空きを取り除く */
+        padding: 1rem 0.75rem 6rem 0.75rem;
+    }
+
+    /* Streamlit のサイドバー幅調整（モバイルでは自動幅に） */
+    section[data-testid="stSidebar"] {
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    /* チャット入力のパディングを少し小さくして表示領域を確保 */
+    div[data-testid="stChatInputContainer"] {
+        padding: 0.75rem 0.75rem 1rem 0.75rem;
+    }
+
+    /* ボタンやタップ可能要素の指向性（大きめに） */
+    button, .stButton button {
+        padding: 0.7rem 1rem;
+        font-size: 1rem;
+        border-radius: 8px;
+        touch-action: manipulation;
+    }
+}
+
+/* 小さめデバイス向けの微調整（狭いスマホ） */
+@media (max-width: 420px) {
+    .avatar {
+        width: 120px;
+        height: 120px;
+    }
+    .content-container {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
