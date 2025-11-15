@@ -6,7 +6,7 @@ import requests
 import streamlit.components.v1 as components
 import os
 import time
-
+from google.genai.types import Part
 # =========================================
 #  システムプロンプト（元のまま）
 # =========================================
@@ -206,8 +206,6 @@ if prompt := st.chat_input("質問を入力してください…"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Geminiへのメッセージ内容を構築するためのリスト
-    # 既にcontents_to_sendがテキストと画像を適切に含んでいるので、
-    # 常にこのリスト全体を渡すようにロジックをシンプルにします。
     contents_to_send = []
     
     # 1. テキストプロンプトを追加
@@ -216,31 +214,33 @@ if prompt := st.chat_input("質問を入力してください…"):
     # 2. 画像データがあれば追加
     if uploaded_image and uploaded_bytes:
         
-        # google-genaiが理解できるPartの辞書形式で画像を追加
-        image_part = {
-            "data": uploaded_bytes,
-            "mime_type": uploaded_image.type
-        }
-        contents_to_send.append(image_part)
-
+        # ★★★ 修正ポイント: Part.from_bytes() を使って画像データを明示的に Part オブジェクトに変換する ★★★
+        try:
+            image_part = Part.from_bytes(
+                data=uploaded_bytes,
+                mime_type=uploaded_image.type
+            )
+            contents_to_send.append(image_part)
+        except Exception as e:
+            # Part変換エラーログ
+            print(f"画像データのPart変換中にエラーが発生しました: {e}")
+            
     # ---- Gemini へ送信 ----
     if st.session_state.chat:
         
-        # ★ 修正ポイント: 常にリスト全体（contents_to_send）を渡します。
-        # テキストのみの場合もリスト（[prompt]）として渡すことで、
-        # Gemini APIがマルチモーダルリクエストの形式として処理できるようにします。
-        message_content = contents_to_send # contents_to_sendは常に1つ以上の要素を持つリスト
+        # message_content は常に contents_to_send リスト全体
+        message_content = contents_to_send 
         
         try:
-            # chat.send_messageにリストを渡す
+            # 修正後のロジック: リストには (str または Part) の組み合わせが含まれる
             response = st.session_state.chat.send_message(message_content)
-        except Exception as e:            # 送信時のエラーをキャッチし、ログに出力
+        except Exception as e:
+            # 送信時のエラーをキャッチし、ログに出力
             response_text = f"Gemini API送信エラー: {type(e).__name__} - {e}"
             print(response_text)
             
         else:
             response_text = response.text if hasattr(response, "text") else str(response)
-
     else:
         response_text = "APIキーが設定されていないため応答できません。"
 
