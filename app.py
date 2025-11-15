@@ -34,7 +34,7 @@ try:
 except:
     API_KEY = ""
 
-SIDEBAR_FIXED_WIDTH = "350px"
+SIDEBAR_FIXED_WIDTH = "200px"
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
 with st.sidebar:
