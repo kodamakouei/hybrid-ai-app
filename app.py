@@ -162,10 +162,15 @@ if "audio_to_play" not in st.session_state:
 with st.sidebar:
     # 修正後の関数を呼び出し
     img_base64, data_uri_prefix, has_image = get_avatar_image()
-    
-    # 画像がなければ警告を表示
-    if not has_image:
-        st.warning("⚠️ アバター画像ファイル（yukki-static.jpg/jpeg/png）が見つかりません。")
+    if has_image:
+        st.markdown(
+            f"""
+            <img src="{data_uri_prefix}{img_base64}" class="avatar">
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning("⚠️ アバター画像（yukki-static.jpg/jpeg/png）がありません")
 
     # サイドバーのレイアウトとアバターを描画 (口パクJSを完全に削除)
     st.markdown(f"""
@@ -185,14 +190,14 @@ with st.sidebar:
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_base64}" class="avatar">
-    <img src="{data_uri_prefix}{img_base64}" 
-             style="width:400px; height:400px; border-radius:16px; object-fit:cover;">
+    
     <script>
     // 口パク機能を削除したため、startTalking/stopTalking関数は空にするか削除します
     window.startTalking = function() {{ /* 機能削除 */ }};
     window.stopTalking = function() {{ /* 機能削除 */ }};
     </script>
     """, unsafe_allow_html=True)
+
 
 # --- 音声再生トリガーをサイドバーに追加（WAV変換ロジックのみ残す） ---
 if st.session_state.audio_to_play:
