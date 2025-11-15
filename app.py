@@ -142,6 +142,9 @@ header {{ visibility: hidden; }}
 [data-testid="stSidebarCollapseButton"] {{
     display: none !important;
 }}
+[data-testid="stSidebarContent"] + div {{
+    display: none !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
