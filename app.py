@@ -36,6 +36,8 @@ try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except:
     API_KEY = ""
+
+SIDEBAR_FIXED_WIDTH = "450px"
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
 with st.sidebar:
@@ -122,10 +124,34 @@ def generate_and_store_tts(text):
 # =========================================
 st.set_page_config(
     page_title="ユッキー",
-    layout="wide" ,
-    initial_sidebar_state="expanded", 
-    menu_items={'About': None, 'Report a bug': None, 'Get help': None}  # ★サイドバーが無い前提で全幅使用
-)
+    layout="wide" )
+t.markdown(f"""
+<style>
+header {{ visibility: hidden; }}
+[data-testid="stSidebarContent"] > div:first-child {{
+    width: {SIDEBAR_FIXED_WIDTH} !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}}
+.avatar {{
+    width: 400px;
+    height: 400px;
+    border-radius: 16px;
+    object-fit: cover;
+    margin: 0 auto;
+}}
+[data-testid="stSidebarContent"] {{
+    width: {SIDEBAR_FIXED_WIDTH} !important;
+    min-width: {SIDEBAR_FIXED_WIDTH} !important;
+    max-width: {SIDEBAR_FIXED_WIDTH} !important;
+}}
+[data-testid="stSidebarCollapseButton"] {{
+    display: none !important;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # ---- セッション初期化 ----
 if "client" not in st.session_state:
