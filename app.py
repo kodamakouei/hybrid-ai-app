@@ -174,4 +174,4 @@ components.html("""
   <button id="mic-btn" class="mic-btn" onclick="window.parent.startRec()">🎙 話す</button>
   <p id="mic-status" class="mic-status">マイク停止中</p>
 </div>
-<\/script>"""
+<\/script>""")
