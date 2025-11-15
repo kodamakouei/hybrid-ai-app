@@ -121,7 +121,9 @@ def generate_and_store_tts(text):
 # =========================================
 st.set_page_config(
     page_title="ユッキー",
-    layout="wide" )
+    layout="wide" ,
+    initial_sidebar_state="expanded", 
+    menu_items={'About': None, 'Report a bug': None, 'Get help': None})
 st.markdown(f"""
 <style>
 header {{ visibility: hidden; }}
