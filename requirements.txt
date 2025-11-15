@@ -1,7 +1,3 @@
-# 先に依存関係が複雑なライブラリをインストール
-google-generai==0.7.1
-Pillow==10.3.0
-PyMuPDF==1.24.6
-requests==2.32.3
-# 最後にStreamlitをインストール
-streamlit==1.35.0
+google-genai
+requests
+streamlit
