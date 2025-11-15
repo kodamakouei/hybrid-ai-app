@@ -160,17 +160,13 @@ if "audio_to_play" not in st.session_state:
 
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
-    # 修正後の関数を呼び出し
     img_base64, data_uri_prefix, has_image = get_avatar_image()
+
+    st.write("has_image =", has_image)
+
     if has_image:
-        st.markdown(
-            f"""
-            <img src="{data_uri_prefix}{img_base64}" class="avatar">
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.warning("⚠️ アバター画像（yukki-static.jpg/jpeg/png）がありません")
+        st.image("yukki-static.jpg", caption="DEBUG: raw display")
+
 
     # サイドバーのレイアウトとアバターを描画 (口パクJSを完全に削除)
     st.markdown(f"""
