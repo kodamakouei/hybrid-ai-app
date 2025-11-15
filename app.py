@@ -39,7 +39,7 @@ except:
     API_KEY = ""
 
 # サイドバーの推奨幅（ファイルアップローダーが収まる最小幅）
-SIDEBAR_FIXED_WIDTH = "600px"
+SIDEBAR_FIXED_WIDTH = "400px"
 
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
@@ -81,12 +81,15 @@ header {{ visibility: hidden; }}
 [data-testid="stSidebarContent"] + div {{
     display: none !important;
 }}
-
+[data-testid="stSidebar"] {{
+    background-color: #f7f0ff; /* 例: 薄いピンク。好きな色に変えてね！ */
+}}
 /* サイドバーのコンテンツコンテナ */
 [data-testid="stSidebarContent"] {{
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
+    background-color: #f7f0ff;
     overflow-x: hidden !important; 
     overflow-y: hidden !important; 
 }}
