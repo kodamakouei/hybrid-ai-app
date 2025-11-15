@@ -4,6 +4,9 @@ import base64, json, requests
 import streamlit.components.v1 as components
 import os
 import time
+from PIL import Image
+import io
+import fitz 
 
 # ===============================
 # 設定
@@ -165,7 +168,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
-
+if "uploaded_file" not in st.session_state:
+    st.session_state.uploaded_file = None
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     # 修正後の関数を呼び出し
@@ -276,6 +280,21 @@ if st.session_state.audio_to_play:
 st.title("🎀 ユッキー（疑似教師）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
 
+uploaded_file = st.file_uploader(
+    "画像やPDFをアップロードして質問できます",
+    type=['png', 'jpg', 'jpeg', 'pdf'],
+    help="ここに画像やPDFファイルをドラッグ＆ドロップしてください。"
+)
+
+if uploaded_file:
+    st.session_state.uploaded_file = uploaded_file
+    # ファイルがアップロードされたら、内容を表示
+    file_type = uploaded_file.type
+    if "pdf" in file_type:
+        st.info("📄 PDFがアップロードされました。下のチャット欄から質問してください。")
+    else:
+        st.image(uploaded_file, caption="アップロードされた画像", width=300)
+
 # 音声認識ボタンとチャット履歴の表示
 st.subheader("音声入力")
 # StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
@@ -342,24 +361,46 @@ for msg in st.session_state.messages:
 if prompt := st.chat_input("質問を入力してください..."):
     # 1. ユーザーメッセージを追加・表示
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
+
     # 2. アシスタントの応答を取得・表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
             if st.session_state.chat:
                 try:
+                    # --- ファイルとプロンプトを準備 ---
+                    content_parts = [prompt]
+                    if st.session_state.uploaded_file:
+                        uploaded_file = st.session_state.uploaded_file
+                        file_bytes = uploaded_file.getvalue()
+                        file_type = uploaded_file.type
+
+                        if "pdf" in file_type:
+                            # PDFを画像に変換
+                            pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                            for page_num in range(len(pdf_doc)):
+                                page = pdf_doc.load_page(page_num)
+                                pix = page.get_pixmap()
+                                img_bytes = pix.tobytes("png")
+                                content_parts.append(Image.open(io.BytesIO(img_bytes)))
+                        else:
+                            # 画像ファイル
+                            content_parts.append(Image.open(io.BytesIO(file_bytes)))
+
                     # Gemini API呼び出し
-                    response = st.session_state.chat.send_message(prompt)
+                    response = st.session_state.chat.send_message(content_parts)
                     text = response.text
-                    
+
                     # 応答テキストを表示
                     st.markdown(text)
-                    
+
                     # 3. 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
-                    
+
                     # 4. メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
+
+                    # 5. 使用済みのファイルをクリア
+                    st.session_state.uploaded_file = None
 
                 except Exception as e:
                     error_msg = f"APIエラーが発生しました: {e}"
@@ -367,7 +408,7 @@ if prompt := st.chat_input("質問を入力してください..."):
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
                 st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-    
+
     # Rerunを実行し、UIを更新
     st.rerun()
 
