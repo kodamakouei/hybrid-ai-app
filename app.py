@@ -267,7 +267,7 @@ if prompt := st.chat_input("質問を入力してください…"):
     if uploaded_image:
         uploaded_image = None # uploaded_imageの参照をリセット
 
-    
+    st.rerun()
 # ---------- 音声再生 ----------
 if st.session_state.audio_to_play:
     st.audio(st.session_state.audio_to_play, format="audio/wav")
