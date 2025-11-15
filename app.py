@@ -188,38 +188,49 @@ for msg in st.session_state.messages:
 
 # ---------- テキストチャット入力 ----------
 if prompt := st.chat_input("質問を入力してください…"):
+    
     # 履歴へ追加 (ユーザー)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Geminiへのメッセージ内容を構築
+    # Geminiへのメッセージ内容を構築するためのリスト
+    # ★ contents_to_sendが最終的に空になることはない（少なくともpromptが入る）
     contents_to_send = []
     
     # 1. テキストプロンプトを追加
     contents_to_send.append(prompt) 
     
     # 2. 画像データがあれば追加
-    # uploaded_bytesの定義がこのブロックの前にあることを確認してください。
+    # uploaded_imageとuploaded_bytesがこのコードブロックの前で正しく設定されていることを前提とします。
     if uploaded_image and uploaded_bytes:
-        # 画像を添付したメッセージとしてcontents_to_sendに要素を追加
-        contents_to_send.append(
-            {
-                "data": uploaded_bytes,
-                "mime_type": uploaded_image.type
-            }
-        )
+        
+        # google-genaiが理解できるPartの辞書形式で画像を追加
+        image_part = {
+            "data": uploaded_bytes,
+            "mime_type": uploaded_image.type
+        }
+        contents_to_send.append(image_part)
 
     # ---- Gemini へ送信 ----
     if st.session_state.chat:
         
-        # ★★★ 修正箇所: 送信内容がテキスト1つか、テキスト+画像かで処理を分岐 ★★★
+        # 送信内容がテキスト1つか、テキスト+画像かで処理を分岐
         if len(contents_to_send) == 1:
-            # テキストのみの場合 (リストではなく文字列を渡す)
-            response = st.session_state.chat.send_message(contents_to_send[0])
+            # ★ 修正: テキストのみの場合、リストではなく文字列を渡す
+            message_content = contents_to_send[0] 
         else:
-            # テキストと画像がある場合 (リストを渡す)
-            response = st.session_state.chat.send_message(contents_to_send)
+            # テキストと画像がある場合、リストを渡す
+            message_content = contents_to_send
+        
+        try:
+            response = st.session_state.chat.send_message(message_content)
+        except Exception as e:
+            # 送信時のエラーをキャッチし、ログに出力
+            response_text = f"Gemini API送信エラー: {type(e).__name__} - {e}"
+            print(response_text)
             
-        response_text = response.text if hasattr(response, "text") else str(response)
+        else:
+            response_text = response.text if hasattr(response, "text") else str(response)
+
     else:
         response_text = "APIキーが設定されていないため応答できません。"
 
@@ -231,9 +242,9 @@ if prompt := st.chat_input("質問を入力してください…"):
     if audio_path:
         st.session_state.audio_to_play = audio_path
         
-    # Streamlitの再実行時に画像が再送信されるのを防ぐため、uploaded_imageの参照をリセット
-    if uploaded_image:
-        uploaded_image = None
+    # Streamlitの再実行 (st.rerun) 前に、次の入力のために画像の状態をリセットすることが重要
+    # Streamlitのライフサイクルにより、ファイルアップローダーの状態は維持されないため、
+    # このロジックはデバッグ目的で残しますが、根本的には st.chat_input の再実行を防ぐために st.rerun が必要です。
 
     st.rerun()
 # ---------- 音声再生 ----------
