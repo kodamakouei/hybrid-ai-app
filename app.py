@@ -187,40 +187,54 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # ---------- テキストチャット入力 ----------
-if prompt := st.chat_input("質問を入力してください…"): # ★ ここで prompt がセットされる
-    # 履歴へ追加
+if prompt := st.chat_input("質問を入力してください…"):
+    # 履歴へ追加 (ユーザー)
     st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Geminiへのメッセージ内容を構築
+    contents_to_send = []
+    
+    # 1. テキストプロンプトを追加
+    contents_to_send.append(prompt) 
+    
+    # 2. 画像データがあれば追加
+    if uploaded_image and uploaded_bytes:
+        # 画像を添付したメッセージとしてcontents_to_sendに要素を追加
+        contents_to_send.append(
+            {
+                "data": uploaded_bytes,
+                "mime_type": uploaded_image.type
+            }
+        )
 
     # ---- Gemini へ送信 ----
     if st.session_state.chat:
         
-        # 画像がある場合、contentsリストにプロンプトと画像データ（バイト列）を渡す
-        if uploaded_image:
-            # st.UploadedFileから読み取ったbytesとMIMEタイプを使用
-            contents = [
-                prompt,
-                {
-                    "data": uploaded_bytes,
-                    "mime_type": uploaded_image.type
-                }
-            ]
-            response = st.session_state.chat.send_message(contents)
-
-        # テキストだけの場合
+        # contents_to_sendが1要素（テキストのみ）の場合はリストを渡さず、文字列のみを渡す
+        # 複数要素（テキスト + 画像）の場合はリストを渡す
+        if len(contents_to_send) == 1:
+            # テキストのみの場合
+            response = st.session_state.chat.send_message(contents_to_send[0])
         else:
-            response = st.session_state.chat.send_message(prompt)
-
+            # テキストと画像がある場合
+            response = st.session_state.chat.send_message(contents_to_send)
+            
         response_text = response.text if hasattr(response, "text") else str(response)
     else:
         response_text = "APIキーが設定されていないため応答できません。"
 
-    # 履歴に追加
+    # 履歴に追加 (アシスタント)
     st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-    # TTS生成
+    # TTS生成 (★ ここは一旦、エラーを発生させていない元のロジックを想定)
     audio_path = generate_and_store_tts(response_text)
     if audio_path:
         st.session_state.audio_to_play = audio_path
+        
+    # 画像ファイルが添付されていた場合、再実行前にUploadedFileオブジェクトをリセットする
+    # これにより、再実行時に画像添付のロジックが走るのを防ぐ
+    if uploaded_image:
+        uploaded_image = None # 参照をリセット
 
     st.rerun()
 
