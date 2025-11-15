@@ -168,7 +168,11 @@ with st.sidebar:
         st.warning("⚠️ アバター画像ファイル（yukki-static.jpg/jpeg/png）が見つかりません。")
 
     # サイドバーのレイアウトとアバターを描画 (口パクJSを完全に削除)
-    st.markdown(f"""
+    if has_image:
+        st.markdown(f"""
+        <img src="{data_uri_prefix}{img_base64}" 
+             style="width:400px; height:400px; border-radius:16px; object-fit:cover;">
+    
     <style>
     /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
     /* サイドバーコンテナ自体を固定 */
