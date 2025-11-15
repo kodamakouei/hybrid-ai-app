@@ -42,7 +42,7 @@ with st.sidebar:
     st.caption("下のBrowse filesを押してファイルをアップロード")
     
     # 画像アップロード機能
-    uploaded_image = st.file_uploader("ファイルをアップロード", type=["jpg", "jpeg", "png"])
+    uploaded_image = st.file_uploader("", type=["jpg", "jpeg", "png"])
     
     uploaded_bytes = None
     if uploaded_image:
