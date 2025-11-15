@@ -189,7 +189,6 @@ with st.sidebar:
     /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
-    <img id="avatar" src="{data_uri_prefix}{img_base64}" class="avatar">
     
     <script>
     // 口パク機能を削除したため、startTalking/stopTalking関数は空にするか削除します
