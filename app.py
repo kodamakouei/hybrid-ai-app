@@ -39,10 +39,10 @@ SIDEBAR_FIXED_WIDTH = "350px"
 # =========================================
 with st.sidebar:
     st.header("📸 画像で質問する")
-    st.caption("チャット履歴に埋もれません。ここにファイルをドラッグ＆ドロップ！")
+    st.caption("下のBrowse filesでファイルをアップロード")
     
     # 画像アップロード機能
-    uploaded_image = st.file_uploader("ファイルをアップロード", type=["jpg", "jpeg", "png"])
+    uploaded_image = st.file_uploader("ファイルをアップロード", type=["jpg", "jpeg", "png","pdf"])
     
     uploaded_bytes = None
     if uploaded_image:
