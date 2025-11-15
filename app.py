@@ -135,13 +135,6 @@ header {{ visibility: hidden; }}
     align-items: center;
     justify-content: flex-start;
 }}
-.avatar {{
-    width: 400px;
-    height: 400px;
-    border-radius: 16px;
-    object-fit: cover;
-    margin: 0 auto;
-}}
 [data-testid="stSidebarContent"] {{
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
