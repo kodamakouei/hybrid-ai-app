@@ -125,7 +125,7 @@ def generate_and_store_tts(text):
 st.set_page_config(
     page_title="ユッキー",
     layout="wide" )
-t.markdown(f"""
+st.markdown(f"""
 <style>
 header {{ visibility: hidden; }}
 [data-testid="stSidebarContent"] > div:first-child {{
