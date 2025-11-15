@@ -6,7 +6,7 @@ import os
 import time
 from PIL import Image
 import io
-import fitz 
+import fitz  # PyMuPDF
 
 # ===============================
 # 設定
@@ -170,6 +170,7 @@ if "audio_to_play" not in st.session_state:
     st.session_state.audio_to_play = None
 if "uploaded_file" not in st.session_state:
     st.session_state.uploaded_file = None
+
 # --- サイドバーにアバターと関連要素を配置 ---
 with st.sidebar:
     # 修正後の関数を呼び出し
@@ -250,8 +251,6 @@ if st.session_state.audio_to_play:
         const base64AudioData = '{st.session_state.audio_to_play}';
         const sampleRate = 24000; // Gemini TTSのデフォルトPCMレート
         
-        // 口パク開始ロジックを削除
-        
         const pcmData = base64ToArrayBuffer(base64AudioData);
         const wavBlob = pcmToWav(pcmData, sampleRate);
         const audioUrl = URL.createObjectURL(wavBlob);
@@ -260,13 +259,10 @@ if st.session_state.audio_to_play:
         audio.autoplay = true;
 
         audio.onended = () => {{
-            // 口パク終了ロジックを削除
-            // URLを解放
             URL.revokeObjectURL(audioUrl);
         }};
         audio.play().catch(e => {{
             console.error("Audio playback failed:", e);
-            // エラー時も口パク終了ロジックを削除
             URL.revokeObjectURL(audioUrl);
         }});
     </script>
@@ -280,24 +276,27 @@ if st.session_state.audio_to_play:
 st.title("🎀 ユッキー（疑似教師）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
 
-uploaded_file = st.file_uploader(
+# ファイルアップローダーを配置
+uploaded_file_widget = st.file_uploader(
     "画像やPDFをアップロードして質問できます",
     type=['png', 'jpg', 'jpeg', 'pdf'],
     help="ここに画像やPDFファイルをドラッグ＆ドロップしてください。"
 )
 
-if uploaded_file:
-    st.session_state.uploaded_file = uploaded_file
-    # ファイルがアップロードされたら、内容を表示
-    file_type = uploaded_file.type
-    if "pdf" in file_type:
-        st.info("📄 PDFがアップロードされました。下のチャット欄から質問してください。")
-    else:
-        st.image(uploaded_file, caption="アップロードされた画像", width=300)
+# ウィジェットで新しいファイルがアップロードされたらセッションを更新
+if uploaded_file_widget:
+    st.session_state.uploaded_file = uploaded_file_widget
 
-# 音声認識ボタンとチャット履歴の表示
+# セッションにファイルが存在する場合、その情報を表示
+if st.session_state.uploaded_file:
+    file_type = st.session_state.uploaded_file.type
+    if "pdf" in file_type:
+        st.info(f"📄 PDF「{st.session_state.uploaded_file.name}」がアップロードされました。下のチャット欄から質問してください。")
+    else:
+        st.image(st.session_state.uploaded_file, caption="アップロードされた画像", width=300)
+
+# 音声認識ボタン
 st.subheader("音声入力")
-# StreamlitのIFrame内で親のStreamlitアプリにメッセージを送信するためのJSを含む
 components.html("""
 <div id="mic-container" style="padding: 10px 0;">
     <button onclick="window.parent.startRec()"
@@ -307,39 +306,28 @@ components.html("""
     <p id="mic-status" style="margin-top: 10px;">マイク停止中</p>
 </div>
 <script>
-// Streamlitのチャット入力欄にテキストを送信する関数
 function sendTextToStreamlit(text) {
-    window.parent.postMessage({
-        type: 'SET_CHAT_INPUT',
-        text: text
-    }, '*');
+    window.parent.postMessage({ type: 'SET_CHAT_INPUT', text: text }, '*');
 }
-
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
-
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = false;
-    
-    // グローバルな認識開始関数 (Streamlit側から呼び出される)
     window.parent.startRec = () => {
         document.getElementById("mic-status").innerText = "🎧 聴き取り中...";
         recognition.start();
     };
-    
     recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
         document.getElementById("mic-status").innerText = "✅ " + text;
         sendTextToStreamlit(text);
     };
-    
     recognition.onerror = (e) => {
         document.getElementById("mic-status").innerText = "⚠️ エラー: " + e.error;
     };
-    
     recognition.onend = () => {
         if (document.getElementById("mic-status").innerText.startsWith("🎧")) {
             document.getElementById("mic-status").innerText = "マイク停止中";
@@ -351,18 +339,24 @@ if (SpeechRecognition) {
 </script>
 """, height=130)
 
+# --- チャット履歴の表示 ---
 st.subheader("ユッキーとの会話履歴")
 for msg in st.session_state.messages:
     avatar_icon = "🧑" if msg["role"] == "user" else "🤖"
     with st.chat_message(msg["role"], avatar=avatar_icon):
         st.markdown(msg["content"])
 
-# --- チャット入力と処理 ---
+# --- チャット入力処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
-    # 1. ユーザーメッセージを追加・表示
+    # ユーザーメッセージを履歴に追加して、すぐに再実行
     st.session_state.messages.append({"role": "user", "content": prompt})
+    st.rerun()
 
-    # 2. アシスタントの応答を取得・表示
+# --- AIの応答生成処理 ---
+# 最後のメッセージがユーザーからのものであれば、AIの応答を生成する
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+    prompt = st.session_state.messages[-1]["content"]
+    
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
             if st.session_state.chat:
@@ -370,12 +364,11 @@ if prompt := st.chat_input("質問を入力してください..."):
                     # --- ファイルとプロンプトを準備 ---
                     content_parts = [prompt]
                     if st.session_state.uploaded_file:
-                        uploaded_file = st.session_state.uploaded_file
-                        file_bytes = uploaded_file.getvalue()
-                        file_type = uploaded_file.type
+                        current_file = st.session_state.uploaded_file
+                        file_bytes = current_file.getvalue()
+                        file_type = current_file.type
 
                         if "pdf" in file_type:
-                            # PDFを画像に変換
                             pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
                             for page_num in range(len(pdf_doc)):
                                 page = pdf_doc.load_page(page_num)
@@ -383,8 +376,10 @@ if prompt := st.chat_input("質問を入力してください..."):
                                 img_bytes = pix.tobytes("png")
                                 content_parts.append(Image.open(io.BytesIO(img_bytes)))
                         else:
-                            # 画像ファイル
                             content_parts.append(Image.open(io.BytesIO(file_bytes)))
+                        
+                        # ★★★ 使用後にファイルをセッションからクリア ★★★
+                        st.session_state.uploaded_file = None
 
                     # Gemini API呼び出し
                     response = st.session_state.chat.send_message(content_parts)
@@ -393,23 +388,22 @@ if prompt := st.chat_input("質問を入力してください..."):
                     # 応答テキストを表示
                     st.markdown(text)
 
-                    # 3. 音声データを生成してセッションステートに保存
+                    # 音声データを生成してセッションステートに保存
                     generate_and_store_tts(text)
 
-                    # 4. メッセージを履歴に追加
+                    # メッセージを履歴に追加
                     st.session_state.messages.append({"role": "assistant", "content": text})
-
-                    # 5. 使用済みのファイルをクリア
-                    st.session_state.uploaded_file = None
 
                 except Exception as e:
                     error_msg = f"APIエラーが発生しました: {e}"
                     st.error(error_msg)
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
             else:
-                st.session_state.messages.append({"role": "assistant", "content": "APIキーが設定されていないため、お答えできません。"})
-
-    # Rerunを実行し、UIを更新
+                error_msg = "APIキーが設定されていないため、お答えできません。"
+                st.warning(error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    
+    # AIの応答が完了したら再度リランしてUIを最終状態に更新
     st.rerun()
 
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
