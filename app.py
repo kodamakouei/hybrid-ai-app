@@ -158,13 +158,6 @@ st.caption("知識は答え、思考は解法ガイドのみを返します。")
 # ---------- 画像アップロード ----------
 st.subheader("画像を送って質問する")
 
-uploaded_image = st.file_uploader("画像をアップロードしてみよう", type=["jpg", "jpeg", "png"])
-
-if uploaded_image:
-    st.image(uploaded_image, caption="アップロードされた画像", width=300)
-    uploaded_bytes = uploaded_image.read()
-else:
-    uploaded_bytes = None
 
 # ---------- ユーザー音声入力 UI（Web Audio API） ----------
 components.html("""
