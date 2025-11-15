@@ -136,7 +136,7 @@ st.caption("知識は答え、思考は解法ガイドのみを返します。")
 st.subheader("ユッキーとの会話履歴")
 
 for msg in st.session_state.messages:
-    avatar_icon = "🧑" if msg["role"] == "user" else "yukki-static.jpg"
+    avatar_icon = "🧑" if msg["role"] == "user" else "yukki-.jpg"
     with st.chat_message(msg["role"], avatar=avatar_icon):
         st.markdown(msg["content"])
 
