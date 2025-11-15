@@ -1,5 +1,5 @@
-streamlit
-google-generai
-requests
-Pillow<10.1.0
-PyMuPDF
+streamlit==1.35.0
+google-generai==0.7.1
+requests==2.32.3
+Pillow==10.3.0
+PyMuPDF==1.24.6
