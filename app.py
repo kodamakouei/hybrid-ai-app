@@ -184,7 +184,6 @@ with st.sidebar:
     /* アバターコンポーネントのスタイル */
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
-    <img id="avatar" src="{data_uri_prefix}{img_base64}" class="avatar">
     
     <script>
     // 口パク機能を削除したため、startTalking/stopTalking関数は空にするか削除します
@@ -264,6 +263,11 @@ if st.session_state.audio_to_play:
     # 再生トリガー実行後、データをクリア
     st.session_state.audio_to_play = None
 
+if has_image:
+    st.markdown(f"""
+        <img src="{data_uri_prefix}{img_base64}" 
+             style="width:400px; height:400px; border-radius:16px; object-fit:cover;">
+    """, unsafe_allow_html=True)
 # --- メインコンテンツ ---
 st.title("🎀 ユッキー（疑似教師）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
