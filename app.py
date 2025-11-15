@@ -81,9 +81,7 @@ header {{ visibility: hidden; }}
 [data-testid="stSidebarContent"] + div {{
     display: none !important;
 }}
-[data-testid="stSidebar"] {{
-    background-color: #f7f0ff; /* 例: 薄いピンク。好きな色に変えてね！ */
-}}
+
 /* サイドバーのコンテンツコンテナ */
 [data-testid="stSidebarContent"] {{
     width: {SIDEBAR_FIXED_WIDTH} !important;
