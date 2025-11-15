@@ -1,3 +1,5 @@
-google-genai
-requests
 streamlit
+google-generai
+requests
+Pillow<10.1.0
+PyMuPDF
