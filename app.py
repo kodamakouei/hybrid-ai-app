@@ -7,9 +7,6 @@ import streamlit.components.v1 as components
 import os
 import time
 from google.genai.types import Part
-# =========================================
-#  システムプロンプト（元のまま）
-# =========================================
 SYSTEM_PROMPT = """
 あなたは教育的な目的を持つ AI アシスタントです。
 ユーザーの質問に対して以下のルールに従ってできるだけかみ砕いてわかりやすく応答してく
@@ -37,7 +34,7 @@ try:
 except:
     API_KEY = ""
 
-SIDEBAR_FIXED_WIDTH = "450px"
+SIDEBAR_FIXED_WIDTH = "300px"
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
 with st.sidebar:
