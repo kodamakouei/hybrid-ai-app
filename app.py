@@ -176,38 +176,32 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # ---------- テキストチャット入力 ----------
-if prompt := st.chat_input("質問を入力してください…"):
+if prompt := st.chat_input("質問を入力してください…"): # ★ ここで prompt がセットされる
     # 履歴へ追加
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # ファイル付きメッセージ
-    file_message = {
-        "mime_type": uploaded_image.type if uploaded_image else "text/plain",
-        "data": base64.b64encode(uploaded_bytes).decode("utf-8") if uploaded_image else prompt
-    }
-
     # ---- Gemini へ送信 ----
-if st.session_state.chat:
-
-    # 画像がある場合
-    if uploaded_image:
-        response = st.session_state.chat.send_message(
-            [
+    if st.session_state.chat:
+        
+        # 画像がある場合、contentsリストにプロンプトと画像データ（バイト列）を渡す
+        if uploaded_image:
+            # st.UploadedFileから読み取ったbytesとMIMEタイプを使用
+            contents = [
                 prompt,
                 {
-                    "mime_type": uploaded_image.type,
-                    "data": uploaded_bytes
+                    "data": uploaded_bytes,
+                    "mime_type": uploaded_image.type
                 }
             ]
-        )
+            response = st.session_state.chat.send_message(contents)
 
-    # テキストだけの場合
+        # テキストだけの場合
+        else:
+            response = st.session_state.chat.send_message(prompt)
+
+        response_text = response.text if hasattr(response, "text") else str(response)
     else:
-        response = st.session_state.chat.send_message(prompt)
-
-    response_text = response.text if hasattr(response, "text") else str(response)
-else:
-    response_text = "APIキーが設定されていないため応答できません。"
+        response_text = "APIキーが設定されていないため応答できません。"
 
     # 履歴に追加
     st.session_state.messages.append({"role": "assistant", "content": response_text})
