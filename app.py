@@ -206,14 +206,14 @@ if prompt := st.chat_input("質問を入力してください…"):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Geminiへのメッセージ内容を構築するためのリスト
-    # ★ contents_to_sendが最終的に空になることはない（少なくともpromptが入る）
+    # 既にcontents_to_sendがテキストと画像を適切に含んでいるので、
+    # 常にこのリスト全体を渡すようにロジックをシンプルにします。
     contents_to_send = []
     
     # 1. テキストプロンプトを追加
     contents_to_send.append(prompt) 
     
     # 2. 画像データがあれば追加
-    # uploaded_imageとuploaded_bytesがこのコードブロックの前で正しく設定されていることを前提とします。
     if uploaded_image and uploaded_bytes:
         
         # google-genaiが理解できるPartの辞書形式で画像を追加
@@ -226,18 +226,15 @@ if prompt := st.chat_input("質問を入力してください…"):
     # ---- Gemini へ送信 ----
     if st.session_state.chat:
         
-        # 送信内容がテキスト1つか、テキスト+画像かで処理を分岐
-        if len(contents_to_send) == 1:
-            # ★ 修正: テキストのみの場合、リストではなく文字列を渡す
-            message_content = contents_to_send[0] 
-        else:
-            # テキストと画像がある場合、リストを渡す
-            message_content = contents_to_send
+        # ★ 修正ポイント: 常にリスト全体（contents_to_send）を渡します。
+        # テキストのみの場合もリスト（[prompt]）として渡すことで、
+        # Gemini APIがマルチモーダルリクエストの形式として処理できるようにします。
+        message_content = contents_to_send # contents_to_sendは常に1つ以上の要素を持つリスト
         
         try:
+            # chat.send_messageにリストを渡す
             response = st.session_state.chat.send_message(message_content)
-        except Exception as e:
-            # 送信時のエラーをキャッチし、ログに出力
+        except Exception as e:            # 送信時のエラーをキャッチし、ログに出力
             response_text = f"Gemini API送信エラー: {type(e).__name__} - {e}"
             print(response_text)
             
