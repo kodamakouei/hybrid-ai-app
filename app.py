@@ -53,7 +53,7 @@ with st.sidebar:
     uploaded_bytes = None
     if uploaded_image:
         # アップロードされた画像を表示し、サイズを小さくする
-        st.image(uploaded_image, caption="送信画像", width=300) 
+        st.image(uploaded_image, caption="送信画像", width=290) 
         # バイナリデータの読み込み
         uploaded_bytes = uploaded_image.read()
     else:
