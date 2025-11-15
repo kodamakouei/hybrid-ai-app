@@ -228,9 +228,10 @@ if prompt := st.chat_input("質問を入力してください…"):
     contents_to_send.append(prompt) 
     
     # 2. 画像データがあれば追加
+    # uploaded_bytes はサイドバーのロジックで既に読み込まれています
     if uploaded_image and uploaded_bytes:
         
-        # ★★★ 修正ポイント: Part.from_bytes() を使って画像データを明示的に Part オブジェクトに変換する ★★★
+        # ★★★ 修正ポイント: Part.from_bytes() を使って画像データを Part オブジェクトに変換 ★★★
         try:
             image_part = Part.from_bytes(
                 data=uploaded_bytes,
@@ -238,7 +239,6 @@ if prompt := st.chat_input("質問を入力してください…"):
             )
             contents_to_send.append(image_part)
         except Exception as e:
-            # Part変換エラーログ
             print(f"画像データのPart変換中にエラーが発生しました: {e}")
             
     # ---- Gemini へ送信 ----
@@ -248,7 +248,7 @@ if prompt := st.chat_input("質問を入力してください…"):
         message_content = contents_to_send 
         
         try:
-            # 修正後のロジック: リストには (str または Part) の組み合わせが含まれる
+            # chat.send_message にリストを渡す (テキスト単体でもリストとして渡る)
             response = st.session_state.chat.send_message(message_content)
         except Exception as e:
             # 送信時のエラーをキャッチし、ログに出力
@@ -257,6 +257,7 @@ if prompt := st.chat_input("質問を入力してください…"):
             
         else:
             response_text = response.text if hasattr(response, "text") else str(response)
+
     else:
         response_text = "APIキーが設定されていないため応答できません。"
 
