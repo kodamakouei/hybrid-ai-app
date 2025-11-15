@@ -157,10 +157,6 @@ if "audio_to_play" not in st.session_state:
 st.title("🎀 ユッキー（疑似教師）")
 st.caption("知識は答え、思考は解法ガイドのみを返します。")
 
-# ---------- 画像アップロード ----------
-st.subheader("画像を送って質問する")
-
-
 # ---------- ユーザー音声入力 UI（Web Audio API） ----------
 components.html("""
 <script>
