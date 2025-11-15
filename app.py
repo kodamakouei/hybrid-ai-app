@@ -168,11 +168,7 @@ with st.sidebar:
         st.warning("⚠️ アバター画像ファイル（yukki-static.jpg/jpeg/png）が見つかりません。")
 
     # サイドバーのレイアウトとアバターを描画 (口パクJSを完全に削除)
-    if has_image:
-        st.markdown(f"""
-        <img src="{data_uri_prefix}{img_base64}" 
-             style="width:400px; height:400px; border-radius:16px; object-fit:cover;">
-    
+    st.markdown(f"""
     <style>
     /* ★★★ stSidebarとstSidebarContentに固定幅を適用し、確実にレイアウトを制御 ★★★ */
     /* サイドバーコンテナ自体を固定 */
@@ -189,7 +185,8 @@ with st.sidebar:
     .avatar {{ width: 400px; height: 400px; border-radius: 16px; object-fit: cover; }}
     </style>
     <img id="avatar" src="{data_uri_prefix}{img_base64}" class="avatar">
-    
+    <img src="{data_uri_prefix}{img_base64}" 
+             style="width:400px; height:400px; border-radius:16px; object-fit:cover;">
     <script>
     // 口パク機能を削除したため、startTalking/stopTalking関数は空にするか削除します
     window.startTalking = function() {{ /* 機能削除 */ }};
