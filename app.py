@@ -198,6 +198,7 @@ if prompt := st.chat_input("質問を入力してください…"):
     contents_to_send.append(prompt) 
     
     # 2. 画像データがあれば追加
+    # uploaded_bytesの定義がこのブロックの前にあることを確認してください。
     if uploaded_image and uploaded_bytes:
         # 画像を添付したメッセージとしてcontents_to_sendに要素を追加
         contents_to_send.append(
@@ -210,13 +211,12 @@ if prompt := st.chat_input("質問を入力してください…"):
     # ---- Gemini へ送信 ----
     if st.session_state.chat:
         
-        # contents_to_sendが1要素（テキストのみ）の場合はリストを渡さず、文字列のみを渡す
-        # 複数要素（テキスト + 画像）の場合はリストを渡す
+        # ★★★ 修正箇所: 送信内容がテキスト1つか、テキスト+画像かで処理を分岐 ★★★
         if len(contents_to_send) == 1:
-            # テキストのみの場合
+            # テキストのみの場合 (リストではなく文字列を渡す)
             response = st.session_state.chat.send_message(contents_to_send[0])
         else:
-            # テキストと画像がある場合
+            # テキストと画像がある場合 (リストを渡す)
             response = st.session_state.chat.send_message(contents_to_send)
             
         response_text = response.text if hasattr(response, "text") else str(response)
@@ -226,18 +226,16 @@ if prompt := st.chat_input("質問を入力してください…"):
     # 履歴に追加 (アシスタント)
     st.session_state.messages.append({"role": "assistant", "content": response_text})
 
-    # TTS生成 (★ ここは一旦、エラーを発生させていない元のロジックを想定)
+    # TTS生成
     audio_path = generate_and_store_tts(response_text)
     if audio_path:
         st.session_state.audio_to_play = audio_path
         
-    # 画像ファイルが添付されていた場合、再実行前にUploadedFileオブジェクトをリセットする
-    # これにより、再実行時に画像添付のロジックが走るのを防ぐ
+    # Streamlitの再実行時に画像が再送信されるのを防ぐため、uploaded_imageの参照をリセット
     if uploaded_image:
-        uploaded_image = None # 参照をリセット
+        uploaded_image = None
 
     st.rerun()
-
 # ---------- 音声再生 ----------
 if st.session_state.audio_to_play:
     st.audio(st.session_state.audio_to_play, format="audio/wav")
