@@ -87,6 +87,7 @@ header {{ visibility: hidden; }}
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
+    background-color: #f7f0ff;
     overflow-x: hidden !important; 
     overflow-y: hidden !important; 
 }}
