@@ -138,6 +138,7 @@ header {{ visibility: hidden; }}
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
+    overflow-x: hidden !important;
 }}
 [data-testid="stSidebarCollapseButton"] {{
     display: none !important;
