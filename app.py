@@ -186,14 +186,28 @@ if prompt := st.chat_input("質問を入力してください…"):
         "data": base64.b64encode(uploaded_bytes).decode("utf-8") if uploaded_image else prompt
     }
 
-    # Gemini へ送信
-    if st.session_state.chat:
-        st.session_state.chat.send_message(prompt)
-        response = st.session_state.chat.send_message([file_message])
+    # ---- Gemini へ送信 ----
+if st.session_state.chat:
 
-        response_text = response.text if hasattr(response, "text") else str(response)
+    # 画像がある場合
+    if uploaded_image:
+        response = st.session_state.chat.send_message(
+            [
+                prompt,
+                {
+                    "mime_type": uploaded_image.type,
+                    "data": uploaded_bytes
+                }
+            ]
+        )
+
+    # テキストだけの場合
     else:
-        response_text = "APIキーが設定されていないため、応答できません。"
+        response = st.session_state.chat.send_message(prompt)
+
+    response_text = response.text if hasattr(response, "text") else str(response)
+else:
+    response_text = "APIキーが設定されていないため応答できません。"
 
     # 履歴に追加
     st.session_state.messages.append({"role": "assistant", "content": response_text})
