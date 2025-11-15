@@ -29,7 +29,7 @@ except:
 # =========================================
 def generate_and_store_tts(text):
     """
-    Gemini Flash 2.0 (tts-1) による日本語音声生成。
+    TTSモデルの互換性チェックのため、モデル名を変更し、エラーログを強化
     """
     if not text:
         return None
@@ -37,10 +37,12 @@ def generate_and_store_tts(text):
     try:
         client = genai.Client(api_key=API_KEY)
 
+        # ★モデル名をメインチャットと同じ安定版に変更 (互換性確認のため)
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash", 
             contents=[text],
             config={
+                # ★ audio_config はそのまま残し、動作するか確認
                 "audio_config": {
                     "voice_name": "ja-JP-Neural2-B",
                     "speaking_rate": 1.05
@@ -50,12 +52,18 @@ def generate_and_store_tts(text):
 
         audio_data = None
         for part in response.parts:
+            # safety_ratings や blocked がないか確認
+            if hasattr(part, "safety_ratings") and part.safety_ratings:
+                print(f"安全性チェックにより応答がブロックされました: {part.safety_ratings}")
+                return None
+                
             if hasattr(part, "data") and part.data:
                 audio_data = part.data
                 break
 
         if not audio_data:
-            print("音声パートが見つかりませんでした。")
+            print("音声パートが見つかりませんでした。全応答パーツ:")
+            print(response.parts) # すべてのパーツを出力して、TTSのバイトデータが含まれているか確認
             return None
 
         audio_bytes = audio_data
@@ -73,7 +81,10 @@ def generate_and_store_tts(text):
         return audio_path
 
     except Exception as e:
-        print("TTS生成中にエラー:", e)
+        # ★エラー発生時の詳細なログを出力
+        print("TTS生成中にエラーが発生しました。詳細:")
+        print(f"エラー種別: {type(e).__name__}")
+        print(f"エラーメッセージ: {e}")
         return None
 
 
