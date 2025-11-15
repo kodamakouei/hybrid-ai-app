@@ -122,7 +122,9 @@ def generate_and_store_tts(text):
 # =========================================
 st.set_page_config(
     page_title="ユッキー",
-    layout="wide"   # ★サイドバーが無い前提で全幅使用
+    layout="wide" ,
+    initial_sidebar_state="expanded", 
+    menu_items={'About': None, 'Report a bug': None, 'Get help': None}  # ★サイドバーが無い前提で全幅使用
 )
 
 # ---- セッション初期化 ----
