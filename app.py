@@ -87,8 +87,8 @@ header {{ visibility: hidden; }}
     width: {SIDEBAR_FIXED_WIDTH} !important;
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
-    /* 水平スクロールバーを非表示 */
     overflow-x: hidden !important; 
+    overflow-y: hidden !important; 
 }}
 
 /* サイドバーを閉じるボタン（<<）を非表示 */
