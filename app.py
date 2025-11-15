@@ -346,17 +346,14 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar_icon):
         st.markdown(msg["content"])
 
-# --- チャット入力処理 ---
+# --- チャット入力とAI応答生成処理 ---
 if prompt := st.chat_input("質問を入力してください..."):
-    # ユーザーメッセージを履歴に追加して、すぐに再実行
+    # 1. ユーザーメッセージを履歴に追加して表示
     st.session_state.messages.append({"role": "user", "content": prompt})
-    st.rerun()
+    with st.chat_message("user", avatar="🧑"):
+        st.markdown(prompt)
 
-# --- AIの応答生成処理 ---
-# 最後のメッセージがユーザーからのものであれば、AIの応答を生成する
-if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-    prompt = st.session_state.messages[-1]["content"]
-    
+    # 2. AIの応答を生成して表示
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("ユッキーが思考中..."):
             if st.session_state.chat:
@@ -403,7 +400,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                 st.warning(error_msg)
                 st.session_state.messages.append({"role": "assistant", "content": error_msg})
     
-    # AIの応答が完了したら再度リランしてUIを最終状態に更新
+    # 処理完了後、一度だけ再実行してUIを最終状態に更新
     st.rerun()
 
 # --- 音声認識からチャット入力へテキストを転送するJavaScript ---
