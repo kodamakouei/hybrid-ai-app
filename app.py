@@ -39,7 +39,7 @@ except:
     API_KEY = ""
 
 # サイドバーの推奨幅（ファイルアップローダーが収まる最小幅）
-SIDEBAR_FIXED_WIDTH = "330px"
+SIDEBAR_FIXED_WIDTH = "400px"
 
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
@@ -88,6 +88,7 @@ header {{ visibility: hidden; }}
     min-width: {SIDEBAR_FIXED_WIDTH} !important;
     max-width: {SIDEBAR_FIXED_WIDTH} !important;
     background-color: #f1f1f1;
+    overflow-x: hidden !important; 
     overflow-y: hidden !important; 
 }}
 
