@@ -12,7 +12,7 @@ from google.genai.types import Part
 #  システムプロンプト
 # =========================================
 SYSTEM_PROMPT = """
-あなたは教育的な目的を持つ AI アシスタント、名前はユッキーです。
+あなたは教育的な目的を持つ AI アシスタントです。
 ユーザーの質問に対して以下のルールに従ってできるだけかみ砕いてわかりやすく応答してく
 ださい。
 1⃣知識・定義直接答えます。
@@ -39,7 +39,7 @@ except:
     API_KEY = ""
 
 # サイドバーの推奨幅（ファイルアップローダーが収まる最小幅）
-SIDEBAR_FIXED_WIDTH = "400px"
+SIDEBAR_FIXED_WIDTH = "330px"
 
 # 📸 サイドバー (画像アップロードをここに固定)
 # =========================================
@@ -66,7 +66,7 @@ st.set_page_config(
     page_title="ユッキー",
     layout="wide",
     # ★ サイドバーを固定し、開いた状態を維持
-    
+    initial_sidebar_state="expanded", 
     # メニュー（三点リーダー）とフッターを非表示
     menu_items={'About': None, 'Report a bug': None, 'Get help': None}
 )
