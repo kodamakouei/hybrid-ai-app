@@ -66,7 +66,7 @@ st.set_page_config(
     page_title="ユッキー",
     layout="wide",
     # ★ サイドバーを固定し、開いた状態を維持
-    initial_sidebar_state="expanded", 
+    
     # メニュー（三点リーダー）とフッターを非表示
     menu_items={'About': None, 'Report a bug': None, 'Get help': None}
 )
